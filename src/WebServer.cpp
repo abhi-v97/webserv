@@ -18,7 +18,7 @@ WebServer::WebServer( const WebServer & src )
 WebServer::WebServer(std::string ipAddress, int port) : m_ipAddress(ipAddress),
 	m_port(port), m_socket(), m_newSocket(), m_incomingMessage(),
 	m_socketAddress(), m_socketAdddress_len(sizeof(m_socketAddress)),
-	m_serverMessage("TODO")
+	m_serverMessage(getResponse())
 {
 	m_socketAddress.sin_family = AF_INET;
 	m_socketAddress.sin_port = htons(m_port);
@@ -57,7 +57,6 @@ std::ostream &			operator<<( std::ostream & o, WebServer const & i )
 	return o;
 }
 
-
 /*
 ** --------------------------------- METHODS ----------------------------------
 */
@@ -75,6 +74,7 @@ int WebServer::startServer()
 		std::cerr << "bind() failed" << std::endl;
 		return (1);
 	}
+	acceptConnection(0);
 	return 0;
 }
 
@@ -92,6 +92,36 @@ void	WebServer::startListen()
 		std::cerr << "listen() failed" << std::endl;
 		return ;
 	}
+}
+
+void WebServer::acceptConnection(int socket)
+{
+	socket = accept(m_socket, (sockaddr *) &m_socketAddress, &m_socketAdddress_len);
+	if (socket < 0)
+	{
+		std::cerr << "accept() failed" << std::endl;
+	}
+}
+
+std::string WebServer::getResponse()
+{
+	return ("idk");
+}
+
+void WebServer::sendResponse()
+{
+	int bytesSent;
+	int totalBytes = 0;
+
+	while (totalBytes < m_serverMessage.size())
+	{
+		bytesSent = send(m_newSocket, m_serverMessage.c_str(), m_serverMessage.size(), 0);
+		if (bytesSent < 0)
+			break ;
+		totalBytes += bytesSent;
+	}
+	if (totalBytes != m_serverMessage.size())
+		std::cout << "send() failed" << std::endl;
 }
 
 /*

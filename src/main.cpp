@@ -9,6 +9,7 @@ void log(const std::string &message)
 int main()
 {
 	WebServer webServer = WebServer("0.0.0.0", 8080);
+	webServer.startListen();
 	
 	return (0);
 }

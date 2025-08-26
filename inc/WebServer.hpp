@@ -5,6 +5,7 @@
 # include <string>
 # include <sys/socket.h>
 # include <arpa/inet.h>
+#include <stdlib.h>
 
 class WebServer
 {
@@ -17,6 +18,15 @@ class WebServer
 
 		WebServer &		operator=( WebServer const & rhs );
 
+		int	startServer();
+		void closeServer();
+		
+		void startListen();
+		void acceptConnection(int socket);
+
+		std::string getResponse();
+		void sendResponse();
+
 	private:
 		std::string			m_ipAddress;
 		int					m_port;
@@ -27,11 +37,6 @@ class WebServer
 		unsigned int		m_socketAdddress_len;
 		std::string			m_serverMessage;
 
-		int	startServer();
-		void closeServer();
-		
-		void startListen();
-		void acceptConnection();
 };
 
 std::ostream &			operator<<( std::ostream & o, WebServer const & i );
