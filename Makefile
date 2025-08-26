@@ -11,7 +11,7 @@ INC_DIR = inc
 SRC =		src/main.cpp \
 			src/WebServer.cpp
 
-OBJS = ${SRC:${SRC_DIR}/%.c=${OBJ_DIR}/%.o}
+OBJS = ${SRC:${SRC_DIR}/%.cpp=${OBJ_DIR}/%.o}
 
 ${NAME}: ${OBJS}
 	${CC} -I${INC_DIR} ${CFLAGS} ${OBJS} -o $@
