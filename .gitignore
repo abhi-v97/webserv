@@ -1,3 +1,5 @@
 webserv
 
 */*.o
+
+compile_commands.json
