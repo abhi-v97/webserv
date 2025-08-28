@@ -34,7 +34,7 @@ class WebServer
 		long m_incomingMessage;
 		struct sockaddr_in m_socketAddress;
 		unsigned int m_socketAdddress_len;
-		std::string m_serverMessage;
+		std::string m_serverResponse;
 };
 
 std::ostream &operator<<(std::ostream &o, WebServer const &i);
