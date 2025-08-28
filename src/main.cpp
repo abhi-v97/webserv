@@ -8,7 +8,7 @@ void log(const std::string &message)
 
 int main()
 {
-	WebServer webServer = WebServer("0.0.0.0", 8080);
+	WebServer webServer = WebServer("127.0.0.1", 8080);
 	webServer.startListen();
 
 	return (0);

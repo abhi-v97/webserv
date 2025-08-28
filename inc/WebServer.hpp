@@ -21,7 +21,7 @@ class WebServer
 		void closeServer();
 
 		void startListen();
-		void acceptConnection(int socket);
+		void acceptConnection();
 
 		std::string getResponse();
 		void sendResponse();
