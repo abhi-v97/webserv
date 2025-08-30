@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+shopt -s globstar
+shopt -s nullglob
+exec < /dev/tty
+
+read -n 1 -p "Check for remaining TODO comments? [y/n] " ANSWER
+echo
+if [[ $ANSWER == "y" ]]; then
+	cat ./**/* | grep TODO || echo "No TODO comments found!"
+fi
+echo
+
+read -n 1 -p "Run clang-format? [y/n] " ANSWER
+echo
+if [[ $ANSWER == "y" ]]; then
+	clang-format -i -- ./**/*.{c,h}pp
+fi
+echo
+
+read -n 1 -p "Run clang-tidy? [y/n] " ANSWER
+echo
+if [[ $ANSWER == "y" ]]; then
+	clang-tidy ./**/*.{c,h}pp --
+fi
+echo
+
+read -n 1 -p "Check compilation? [y/n] " ANSWER
+echo
+if [[ $ANSWER == "y" ]]; then
+	make --quiet re
+fi
+echo
+
+read -n 1 -p "Run tests? [y/n] " ANSWER
+echo
+if [[ $ANSWER == "y" ]]; then
+	echo "Tests not configured yet."
+fi
