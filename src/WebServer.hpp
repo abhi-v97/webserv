@@ -23,7 +23,7 @@ public:
 	void startListen();
 	void acceptConnection();
 
-	std::string getResponse();
+	std::string defaultResponse();
 	void sendResponse();
 
 private:
