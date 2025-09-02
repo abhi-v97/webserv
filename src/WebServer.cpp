@@ -5,6 +5,8 @@
 #include <sstream>
 #include <unistd.h>
 
+#include "CgiHandler.hpp"
+#include "ResponseBuilder.hpp"
 #include "WebServer.hpp"
 
 /*
@@ -12,10 +14,14 @@
 */
 
 WebServer::WebServer()
+	: m_port(), m_socket(), m_newSocket(), m_incomingMessage(),
+	  m_socketAddress(), m_socketAdddress_len()
 {
 }
 
 WebServer::WebServer(const WebServer &src)
+	: m_port(), m_socket(), m_newSocket(), m_incomingMessage(),
+	  m_socketAddress(), m_socketAdddress_len()
 {
 	(void)src;
 }
@@ -23,8 +29,7 @@ WebServer::WebServer(const WebServer &src)
 WebServer::WebServer(std::string ipAddress, int port)
 	: m_ipAddress(ipAddress), m_port(port), m_socket(), m_newSocket(),
 	  m_incomingMessage(), m_socketAddress(),
-	  m_socketAdddress_len(sizeof(m_socketAddress)),
-	  m_serverResponse(getResponse())
+	  m_socketAdddress_len(sizeof(m_socketAddress))
 {
 	m_socketAddress.sin_family = AF_INET;
 	m_socketAddress.sin_port = htons(m_port);
@@ -56,11 +61,12 @@ WebServer &WebServer::operator=(const WebServer &rhs)
 	return *this;
 }
 
-std::ostream &operator<<(std::ostream &o, const WebServer &i)
+std::ostream &operator<<(std::ostream &outf, const WebServer &obj)
 {
 	// o << "Value = " << i.getValue();
-	(void)o;
-	return o;
+	(void)obj;
+	(void)outf;
+	return outf;
 }
 
 /*
@@ -105,15 +111,18 @@ int WebServer::startServer()
 // back (test.html for now). Then it shuts down.
 void WebServer::startListen()
 {
-	if (listen(m_socket, 1) < 0)
+	while (42)
 	{
-		std::cerr << "listen() failed" << std::strerror(errno) << std::endl;
-		return;
+		if (listen(m_socket, 1) < 0)
+		{
+			std::cerr << "listen() failed" << std::strerror(errno) << std::endl;
+			return;
+		}
+		std::cout << "Server now listening on: " << m_ipAddress
+				  << ", port: " << m_port << std::endl;
+		acceptConnection();
+		sendResponse();
 	}
-	std::cout << "Server now listening on: " << m_ipAddress
-			  << ", port: " << m_port << std::endl;
-	acceptConnection();
-	sendResponse();
 }
 
 // accepts the client connection
@@ -149,11 +158,10 @@ void WebServer::acceptConnection()
 }
 
 // called at construction, creates the response message
-// confusing, needs to be broken up into multiple functions
 // ifstream sets input stream to a file, ostringstream reads the entire file
 // using rdbuf() body is the html file contents, response is some information
 // plus the body
-std::string WebServer::getResponse()
+std::string WebServer::defaultResponse()
 {
 	std::ifstream htmlFile("test.html");
 	std::ostringstream body;
@@ -169,9 +177,33 @@ std::string WebServer::getResponse()
 // send data to client
 void WebServer::sendResponse()
 {
+	// CGI demo code, currently overwriting the default response message
 	int bytesSent;
 	int totalBytes = 0;
 
+	// to determine if a cgi script needs to be run or not, we need to check if
+	// the requested file ends in .py etc, or if the requested file is in the
+	// cgi-bin folder
+	int isCGI = 1;
+	if (isCGI)
+	{
+		ResponseBuilder dummyObj = ResponseBuilder();
+		CgiHandler cgiObj = CgiHandler();
+	
+		// executes a simple python script, here we would pass a container or
+		// something instead of a hardcoded string
+		cgiObj.execute("hello.py");
+		m_serverResponse = dummyObj.buildCgiResponse(cgiObj.getOutFd());
+	}
+	else {
+		m_serverResponse = defaultResponse();
+	}
+
+	std::cout << " ***** Server response ***** " << std::endl;
+	std::cout << m_serverResponse << std::endl;
+	std::cout << " ***** Server response over ***** " << std::endl;
+
+	// send everything in m_serverResponse to client
 	std::cout << "attempting to send response to client" << std::endl;
 	while (totalBytes < m_serverResponse.size())
 	{
