@@ -2,10 +2,24 @@
 #define WEBSERVER_HPP
 
 #include <arpa/inet.h>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <map>
+#include <poll.h> // used for poll()
 #include <string>
+#include <sys/poll.h>
 #include <sys/socket.h>
+#include <vector>
+
+struct ClientState
+{
+	int fd;
+	std::string response;
+	std::string request;
+	ssize_t bytesRead;
+	ssize_t bytesSent;
+};
 
 class WebServer
 {
@@ -18,26 +32,32 @@ public:
 	WebServer &operator=(const WebServer &rhs);
 
 	int startServer();
-	void closeServer();
+	void closeServer() const;
 
 	void startListen();
 	void acceptConnection();
 
-	std::string getResponse();
-	void sendResponse();
+	void parseRequest(int clientNum);
+
+	static std::string defaultResponse();
+	bool sendResponse(int clientFd);
+	void generateResponse(int clientFd);
 
 private:
-	std::string m_ipAddress;
-	int m_port;
-	int m_socket;
-	int m_newSocket;
-	long m_incomingMessage;
-	struct sockaddr_in m_socketAddress;
-	unsigned int m_socketAdddress_len;
-	std::string m_serverResponse;
+	std::string mIpAddress;
+	int mPort;
+	int mListenSocket;
+	struct sockaddr_in mSocketAddress;
+	unsigned int mSocketAdddressLen;
+	std::map<int, ClientState> mClients;
+	std::vector<pollfd> mPollFdVector;
+	int mSignal;
 };
 
-std::ostream &operator<<(std::ostream &o, const WebServer &i);
+std::ostream &operator<<(std::ostream &outf, const WebServer &src);
+
+bool setNonBlockingFlag(int socketFd);
+void signalHandler(int sig);
 
 #endif /* ******************************************************* WEBSERVER_H  \
         */
