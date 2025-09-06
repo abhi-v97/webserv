@@ -21,7 +21,7 @@ public:
 	void closeServer();
 
 	void startListen();
-	void acceptConnection();
+	void acceptConnection(struct pollfd *pollFds);
 
 	std::string defaultResponse();
 	void sendResponse();
@@ -31,6 +31,7 @@ private:
 	int m_port;
 	int m_socket;
 	int m_newSocket;
+	int	m_clientCount;
 	long m_incomingMessage;
 	struct sockaddr_in m_socketAddress;
 	unsigned int m_socketAdddress_len;

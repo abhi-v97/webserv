@@ -1,34 +1,40 @@
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
+#include <fcntl.h> // used for fcntl(), believe it or not
 #include <fstream>
 #include <iostream>
+#include <poll.h> // used for poll()
 #include <sstream>
+#include <sys/poll.h>
 #include <unistd.h>
-#include <fcntl.h> // used for fcntl, believe it or not
 
 #include "CgiHandler.hpp"
 #include "ResponseBuilder.hpp"
 #include "WebServer.hpp"
+
+// used to configure poll()
+#define MAX_CLIENTS 10
 
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
 WebServer::WebServer()
-	: m_port(), m_socket(), m_newSocket(), m_incomingMessage(),
+	: m_port(), m_socket(), m_newSocket(), m_clientCount(0), m_incomingMessage(),
 	  m_socketAddress(), m_socketAdddress_len()
 {
 }
 
 WebServer::WebServer(const WebServer &src)
-	: m_port(), m_socket(), m_newSocket(), m_incomingMessage(),
+	: m_port(), m_socket(), m_newSocket(), m_clientCount(0), m_incomingMessage(),
 	  m_socketAddress(), m_socketAdddress_len()
 {
 	(void)src;
 }
 
 WebServer::WebServer(std::string ipAddress, int port)
-	: m_ipAddress(ipAddress), m_port(port), m_socket(), m_newSocket(),
+	: m_ipAddress(ipAddress), m_port(port), m_socket(), m_newSocket(), m_clientCount(0),
 	  m_incomingMessage(), m_socketAddress(),
 	  m_socketAdddress_len(sizeof(m_socketAddress))
 {
@@ -95,7 +101,7 @@ int WebServer::startServer()
 		std::cerr << "setsockopt(SO_REUSEADDR) failed" << std::strerror(errno)
 				  << std::endl;
 	}
-	
+
 	// set the socket to be non-blocking
 	setNonBlockingFlag(m_socket);
 
@@ -115,29 +121,67 @@ int WebServer::startServer()
 // back (test.html for now). Then it shuts down.
 void WebServer::startListen()
 {
-	while (42)
+	if (listen(m_socket, 1) < 0)
 	{
-		if (listen(m_socket, 1) < 0)
-		{
-			std::cerr << "listen() failed" << std::strerror(errno) << std::endl;
-			return;
-		}
-		std::cout << "Server now listening on: " << m_ipAddress
-				  << ", port: " << m_port << std::endl;
-		acceptConnection();
-		sendResponse();
+		std::cerr << "listen() failed" << std::strerror(errno) << std::endl;
+		return;
 	}
+	std::cout << "Server now listening on: " << m_ipAddress
+			  << ", port: " << m_port << std::endl;
+
+	int pollFd;
+	struct pollfd pollFds[MAX_CLIENTS];
+
+	pollFds[0].fd = m_socket;
+	pollFds[0].events = POLLIN;
+	while (true)
+	{
+		int pollNum = poll(pollFds, m_clientCount, -1);
+		for (int i = 0; i < m_clientCount; i++)
+		{
+			if (pollFds[i].fd == m_socket)
+			{
+				// if this condition is true, it means we have a new connection
+				// that we need to set up
+				acceptConnection(pollFds);
+			}
+			else
+			{
+				// else, this means we're now dealing with a client
+				ssize_t bytes = 0;
+				char buffer[4096] = {0};
+
+				bytes = recv(m_newSocket, buffer, 4096, 0);
+				if (bytes < 0)
+				{
+					std::cerr << "could not read client request" << std::endl;
+				}
+				else
+				{
+					std::cout << std::endl
+							  << "***** client request *****" << std::endl
+							  << std::endl;
+					std::cout << buffer;
+					std::cout << "***** client request over *****" << std::endl
+							  << std::endl;
+				}
+			}
+		}
+	}
+	sendResponse();
 }
 
 // accepts the client connection
 // m_newSocket is the new socket established between client and server
 // m_socket will be used to listen to further connections
 // so far, simply reads and prints the client request
-void WebServer::acceptConnection()
+void WebServer::acceptConnection(struct pollfd *pollFds)
 {
-	int bytes = 0;
-	char buffer[4096] = {0};
-
+	if (m_clientCount > MAX_CLIENTS)
+	{
+		std::cerr << "too many connections, for now" << std::endl;
+		exit(1);
+	}
 	m_newSocket =
 		accept(m_socket, (sockaddr *)&m_socketAddress, &m_socketAdddress_len);
 	if (m_newSocket < 0)
@@ -145,20 +189,9 @@ void WebServer::acceptConnection()
 		std::cerr << "accept() failed" << std::strerror(errno) << std::endl;
 	}
 	std::cout << "accepted client, newSocket fd: " << m_newSocket << std::endl;
-	bytes = recv(m_newSocket, buffer, 4096, 0);
-	if (bytes < 0)
-	{
-		std::cerr << "could not read client request" << std::endl;
-	}
-	else
-	{
-		std::cout << std::endl
-				  << "***** client request *****" << std::endl
-				  << std::endl;
-		std::cout << buffer;
-		std::cout << "***** client request over *****" << std::endl
-				  << std::endl;
-	}
+	m_clientCount++;
+	pollFds[m_clientCount].fd = m_newSocket;
+	pollFds[m_clientCount].events = POLLIN;
 }
 
 // called at construction, creates the response message
@@ -193,13 +226,14 @@ void WebServer::sendResponse()
 	{
 		ResponseBuilder dummyObj = ResponseBuilder();
 		CgiHandler cgiObj = CgiHandler();
-	
+
 		// executes a simple python script, here we would pass a container or
 		// something instead of a hardcoded string
 		cgiObj.execute("hello.py");
 		m_serverResponse = dummyObj.buildCgiResponse(cgiObj.getOutFd());
 	}
-	else {
+	else
+	{
 		m_serverResponse = defaultResponse();
 	}
 
@@ -240,21 +274,23 @@ void WebServer::closeServer()
 ** --------------------------------- ACCESSOR ---------------------------------
 */
 
-
 /* ************************************************************************** */
 
-bool	setNonBlockingFlag(int socketFd) {
+// Need to decide if this function should be a private function for this class
+// or perhaps place it in a utils.cpp file for better readability
+bool setNonBlockingFlag(int socketFd)
+{
 	int flags = fcntl(socketFd, F_GETFL, 0);
 	if (flags == -1)
 	{
 		std::cerr << "get flag fcntl operation failed" << std::endl;
-		return (false);
+		return false;
 	}
 	int status = fcntl(socketFd, F_SETFL, flags | O_NONBLOCK);
 	if (status == -1)
 	{
 		std::cerr << "set flag fcntl operation failed" << std::endl;
-		return (false);
+		return false;
 	}
-	return (true);
+	return true;
 }
