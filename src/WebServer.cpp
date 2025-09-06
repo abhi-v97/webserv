@@ -169,12 +169,16 @@ void WebServer::startListen()
 					std::cout << buffer;
 					std::cout << "***** client request over *****" << std::endl
 							  << std::endl;
-					
-					// we have enough data, now send reponse to client
-					// this needs to be in a loop of its own I think, with
-					// another poll call to determine which clients are ready
-					// to accept data
-					sendResponse(pollFds[i].fd);
+					pollFds[i].events |= POLLOUT;
+				}
+			}
+			if (pollFds[i].revents & POLLOUT)
+			{
+				// we have enough data, now send reponse to client
+				if (sendResponse(pollFds[i].fd))
+				{
+					// if all data has been sent, remove POLLOUT flag
+					pollFds[i].events &= ~POLLOUT;
 				}
 			}
 		}
@@ -222,7 +226,7 @@ std::string WebServer::defaultResponse()
 }
 
 // send data to client
-void WebServer::sendResponse(int clientFd)
+bool WebServer::sendResponse(int clientFd)
 {
 	// CGI demo code, currently overwriting the default response message
 	int bytesSent;
@@ -270,7 +274,9 @@ void WebServer::sendResponse(int clientFd)
 	else
 	{
 		std::cout << "send() success!" << std::endl;
+		return true;
 	}
+	return false;
 }
 
 void WebServer::closeServer()
