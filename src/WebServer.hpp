@@ -24,7 +24,7 @@ public:
 	void acceptConnection(struct pollfd *pollFds);
 
 	std::string defaultResponse();
-	void sendResponse();
+	void sendResponse(int clientFd);
 
 private:
 	std::string m_ipAddress;

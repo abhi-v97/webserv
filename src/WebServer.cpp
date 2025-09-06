@@ -21,21 +21,21 @@
 */
 
 WebServer::WebServer()
-	: m_port(), m_socket(), m_newSocket(), m_clientCount(0), m_incomingMessage(),
-	  m_socketAddress(), m_socketAdddress_len()
+	: m_port(), m_socket(), m_newSocket(), m_clientCount(0),
+	  m_incomingMessage(), m_socketAddress(), m_socketAdddress_len()
 {
 }
 
 WebServer::WebServer(const WebServer &src)
-	: m_port(), m_socket(), m_newSocket(), m_clientCount(0), m_incomingMessage(),
-	  m_socketAddress(), m_socketAdddress_len()
+	: m_port(), m_socket(), m_newSocket(), m_clientCount(0),
+	  m_incomingMessage(), m_socketAddress(), m_socketAdddress_len()
 {
 	(void)src;
 }
 
 WebServer::WebServer(std::string ipAddress, int port)
-	: m_ipAddress(ipAddress), m_port(port), m_socket(), m_newSocket(), m_clientCount(0),
-	  m_incomingMessage(), m_socketAddress(),
+	: m_ipAddress(ipAddress), m_port(port), m_socket(), m_newSocket(),
+	  m_clientCount(0), m_incomingMessage(), m_socketAddress(),
 	  m_socketAdddress_len(sizeof(m_socketAddress))
 {
 	m_socketAddress.sin_family = AF_INET;
@@ -136,25 +136,30 @@ void WebServer::startListen()
 	pollFds[0].events = POLLIN;
 	while (true)
 	{
-		int pollNum = poll(pollFds, m_clientCount, -1);
-		for (int i = 0; i < m_clientCount; i++)
+		int pollNum = poll(pollFds, m_clientCount + 1, 1);
+		for (int i = 0; i < m_clientCount + 1; i++)
 		{
-			if (pollFds[i].fd == m_socket)
+			if (pollFds[i].fd == m_socket && (pollFds[i].revents & POLLIN))
 			{
 				// if this condition is true, it means we have a new connection
 				// that we need to set up
 				acceptConnection(pollFds);
 			}
-			else
+			else if (pollFds[i].revents & POLLIN)
 			{
 				// else, this means we're now dealing with a client
 				ssize_t bytes = 0;
 				char buffer[4096] = {0};
 
-				bytes = recv(m_newSocket, buffer, 4096, 0);
+				bytes = recv(pollFds[i].fd, buffer, 4096, 0);
 				if (bytes < 0)
 				{
 					std::cerr << "could not read client request" << std::endl;
+				}
+				else if (bytes == 0)
+				{
+					std::cerr << "recv(): zero bytes received, connection "
+							  << pollFds[i].fd << " closed" << std::endl;
 				}
 				else
 				{
@@ -164,11 +169,16 @@ void WebServer::startListen()
 					std::cout << buffer;
 					std::cout << "***** client request over *****" << std::endl
 							  << std::endl;
+					
+					// we have enough data, now send reponse to client
+					// this needs to be in a loop of its own I think, with
+					// another poll call to determine which clients are ready
+					// to accept data
+					sendResponse(pollFds[i].fd);
 				}
 			}
 		}
 	}
-	sendResponse();
 }
 
 // accepts the client connection
@@ -212,7 +222,7 @@ std::string WebServer::defaultResponse()
 }
 
 // send data to client
-void WebServer::sendResponse()
+void WebServer::sendResponse(int clientFd)
 {
 	// CGI demo code, currently overwriting the default response message
 	int bytesSent;
@@ -221,7 +231,7 @@ void WebServer::sendResponse()
 	// to determine if a cgi script needs to be run or not, we need to check if
 	// the requested file ends in .py etc, or if the requested file is in the
 	// cgi-bin folder
-	int isCGI = 1;
+	int isCGI = 0;
 	if (isCGI)
 	{
 		ResponseBuilder dummyObj = ResponseBuilder();
@@ -245,7 +255,7 @@ void WebServer::sendResponse()
 	std::cout << "attempting to send response to client" << std::endl;
 	while (totalBytes < m_serverResponse.size())
 	{
-		bytesSent = send(m_newSocket, m_serverResponse.c_str(),
+		bytesSent = send(clientFd, m_serverResponse.c_str(),
 		                 m_serverResponse.size(), 0);
 		if (bytesSent < 0)
 		{
