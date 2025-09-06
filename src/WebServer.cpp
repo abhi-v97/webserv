@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include <unistd.h>
+#include <fcntl.h> // used for fcntl, believe it or not
 
 #include "CgiHandler.hpp"
 #include "ResponseBuilder.hpp"
@@ -94,6 +95,9 @@ int WebServer::startServer()
 		std::cerr << "setsockopt(SO_REUSEADDR) failed" << std::strerror(errno)
 				  << std::endl;
 	}
+	
+	// set the socket to be non-blocking
+	setNonBlockingFlag(m_socket);
 
 	// bind socket and sever port
 	if (bind(m_socket, (sockaddr *)&m_socketAddress, m_socketAdddress_len) < 0)
@@ -236,4 +240,21 @@ void WebServer::closeServer()
 ** --------------------------------- ACCESSOR ---------------------------------
 */
 
+
 /* ************************************************************************** */
+
+bool	setNonBlockingFlag(int socketFd) {
+	int flags = fcntl(socketFd, F_GETFL, 0);
+	if (flags == -1)
+	{
+		std::cerr << "get flag fcntl operation failed" << std::endl;
+		return (false);
+	}
+	int status = fcntl(socketFd, F_SETFL, flags | O_NONBLOCK);
+	if (status == -1)
+	{
+		std::cerr << "set flag fcntl operation failed" << std::endl;
+		return (false);
+	}
+	return (true);
+}

@@ -39,5 +39,10 @@ private:
 
 std::ostream &operator<<(std::ostream &o, const WebServer &i);
 
+	
+// testing, function will be used to change socket_fd to nonblocking
+bool	setNonBlockingFlag(int socketFd);
+
+
 #endif /* ******************************************************* WEBSERVER_H  \
         */
