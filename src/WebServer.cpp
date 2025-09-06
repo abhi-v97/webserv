@@ -1,43 +1,49 @@
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
+#include <fcntl.h> // used for fcntl(), believe it or not
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <sys/poll.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "CgiHandler.hpp"
 #include "ResponseBuilder.hpp"
 #include "WebServer.hpp"
 
+// TODO: the formatter insists on rearranging header files to be in ascending
+// orde
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
 WebServer::WebServer()
-	: m_port(), m_socket(), m_newSocket(), m_incomingMessage(),
-	  m_socketAddress(), m_socketAdddress_len()
+	: mPort(), mListenSocket(), mClientCount(0), mSocketAddress(),
+	  mSocketAdddressLen(), mPollFdStruct()
 {
 }
 
 WebServer::WebServer(const WebServer &src)
-	: m_port(), m_socket(), m_newSocket(), m_incomingMessage(),
-	  m_socketAddress(), m_socketAdddress_len()
+	: mPort(), mListenSocket(), mClientCount(0), mSocketAddress(),
+	  mSocketAdddressLen(), mPollFdStruct()
 {
 	(void)src;
 }
 
 WebServer::WebServer(std::string ipAddress, int port)
-	: m_ipAddress(ipAddress), m_port(port), m_socket(), m_newSocket(),
-	  m_incomingMessage(), m_socketAddress(),
-	  m_socketAdddress_len(sizeof(m_socketAddress))
+	: mIpAddress(ipAddress), mPort(port), mListenSocket(), mClientCount(0),
+	  mSocketAddress(), mSocketAdddressLen(sizeof(mSocketAddress)),
+	  mPollFdStruct()
 {
-	m_socketAddress.sin_family = AF_INET;
-	m_socketAddress.sin_port = htons(m_port);
-	m_socketAddress.sin_addr.s_addr = inet_addr(m_ipAddress.c_str());
+	mSocketAddress.sin_family = AF_INET;
+	mSocketAddress.sin_port = htons(mPort);
+	mSocketAddress.sin_addr.s_addr = inet_addr(mIpAddress.c_str());
 
 	if (startServer() > 0)
 	{
-		std::cerr << "cannot connect to socket: " << m_port << ": "
+		std::cerr << "cannot connect to socket: " << mPort << ": "
 				  << std::strerror(errno) << std::endl;
 	}
 }
@@ -55,17 +61,21 @@ WebServer::~WebServer()
 ** --------------------------------- OVERLOAD ---------------------------------
 */
 
-WebServer &WebServer::operator=(const WebServer &rhs)
+WebServer &WebServer::operator=(const WebServer &obj)
 {
-	(void)rhs;
+	if (this == &obj)
+	{
+		return *this;
+	}
+	this->mIpAddress = obj.mIpAddress;
+	this->mPort = obj.mPort;
+	this->mSocketAdddressLen = obj.mSocketAdddressLen;
 	return *this;
 }
 
 std::ostream &operator<<(std::ostream &outf, const WebServer &obj)
 {
-	// o << "Value = " << i.getValue();
-	(void)obj;
-	(void)outf;
+	outf << "42 Webserv" << std::endl;
 	return outf;
 }
 
@@ -76,27 +86,31 @@ std::ostream &operator<<(std::ostream &outf, const WebServer &obj)
 int WebServer::startServer()
 {
 	// set up the listening socket
-	m_socket = socket(AF_INET, SOCK_STREAM, 0);
-	if (m_socket < 0)
+	mListenSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (mListenSocket < 0)
 	{
 		std::cerr << "socket() failed" << std::strerror(errno) << std::endl;
 		return 1;
 	}
-	std::cout << "Socket created with value: " << m_socket << std::endl;
+	std::cout << "Socket created with value: " << mListenSocket << std::endl;
 
 	// OS doesn't immediately free the port, which causes web server to hang
 	// if you close and reopen it quickly. This tells our server that we can
 	// reuse the port.
 	int enable = 1;
-	if (setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) <
-	    0)
+	if (setsockopt(mListenSocket, SOL_SOCKET, SO_REUSEADDR, &enable,
+	               sizeof(int)) < 0)
 	{
 		std::cerr << "setsockopt(SO_REUSEADDR) failed" << std::strerror(errno)
 				  << std::endl;
 	}
 
+	// set the socket to be non-blocking
+	setNonBlockingFlag(mListenSocket);
+
 	// bind socket and sever port
-	if (bind(m_socket, (sockaddr *)&m_socketAddress, m_socketAdddress_len) < 0)
+	if (bind(mListenSocket, (sockaddr *)&mSocketAddress, mSocketAdddressLen) <
+	    0)
 	{
 		std::cerr << "bind() failed" << std::strerror(errno) << std::endl;
 		return 1;
@@ -111,17 +125,43 @@ int WebServer::startServer()
 // back (test.html for now). Then it shuts down.
 void WebServer::startListen()
 {
-	while (42)
+	if (listen(mListenSocket, 1) < 0)
 	{
-		if (listen(m_socket, 1) < 0)
+		std::cerr << "listen() failed" << std::strerror(errno) << std::endl;
+		return;
+	}
+	std::cout << "Server now listening on: " << mIpAddress
+			  << ", port: " << mPort << std::endl;
+
+	// add listening socket to pollfd struct so poll() can monitor it
+	mPollFdStruct[0].fd = mListenSocket;
+	mPollFdStruct[0].events = POLLIN;
+	while (true)
+	{
+		int pollNum = poll(mPollFdStruct, mClientCount + 1, 1);
+		for (int i = 0; i < mClientCount + 1; i++)
 		{
-			std::cerr << "listen() failed" << std::strerror(errno) << std::endl;
-			return;
+			if (mPollFdStruct[i].fd == mListenSocket &&
+			    (mPollFdStruct[i].revents & POLLIN))
+			{
+				// if this condition is true, it means we have a new connection
+				acceptConnection();
+			}
+			else if (mPollFdStruct[i].revents & POLLIN)
+			{
+				// this means we're now dealing with a client
+				parseRequest(i);
+			}
+			if (mPollFdStruct[i].revents & POLLOUT)
+			{
+				// if we have enough data, send reponse to client
+				if (sendResponse(mPollFdStruct[i].fd))
+				{
+					// if all data has been sent, remove POLLOUT flag
+					mPollFdStruct[i].events &= ~POLLOUT;
+				}
+			}
 		}
-		std::cout << "Server now listening on: " << m_ipAddress
-				  << ", port: " << m_port << std::endl;
-		acceptConnection();
-		sendResponse();
 	}
 }
 
@@ -131,29 +171,67 @@ void WebServer::startListen()
 // so far, simply reads and prints the client request
 void WebServer::acceptConnection()
 {
-	int bytes = 0;
-	char buffer[4096] = {0};
+	int newSocket = 0;
 
-	m_newSocket =
-		accept(m_socket, (sockaddr *)&m_socketAddress, &m_socketAdddress_len);
-	if (m_newSocket < 0)
+	if (mClientCount > MAX_CLIENTS)
+	{
+		std::cerr << "too many connections, for now" << std::endl;
+		exit(1);
+	}
+	newSocket =
+		accept(mListenSocket, (sockaddr *)&mSocketAddress, &mSocketAdddressLen);
+	if (newSocket < 0)
 	{
 		std::cerr << "accept() failed" << std::strerror(errno) << std::endl;
 	}
-	std::cout << "accepted client, newSocket fd: " << m_newSocket << std::endl;
-	bytes = recv(m_newSocket, buffer, 4096, 0);
-	if (bytes < 0)
+	std::cout << "accepted client, newSocket fd: " << newSocket << std::endl;
+
+	// update the pollfd struct
+	mClientCount++;
+	mPollFdStruct[mClientCount].fd = newSocket;
+	mPollFdStruct[mClientCount].events = POLLIN;
+
+	// update clientState with new client
+	ClientState state;
+	state.bytesRead = 0;
+	state.bytesSent = 0;
+	state.fd = newSocket;
+	mClients[newSocket] = state;
+}
+
+void WebServer::parseRequest(int clientNum)
+{
+	ClientState &client = mClients[mPollFdStruct[clientNum].fd];
+	char buffer[4096] = {0};
+
+	client.bytesRead = recv(mPollFdStruct[clientNum].fd, buffer, 4096, 0);
+	client.request += buffer;
+	if (client.bytesRead < 0)
 	{
 		std::cerr << "could not read client request" << std::endl;
 	}
-	else
+	else if (client.bytesRead == 0)
+	{
+		std::cerr << "recv(): zero bytes received, connection "
+				  << mPollFdStruct[clientNum].fd << " closed" << std::endl;
+		// remove the client from pollfd struct by overwriting it
+		// with the last item
+		mClients.erase(mPollFdStruct[clientNum].fd);
+		close(mPollFdStruct[clientNum].fd);
+		mPollFdStruct[clientNum] = mPollFdStruct[mClientCount];
+		mClientCount--;
+	}
+	else if (client.request.find("\r\n\r\n") != std::string::npos)
 	{
 		std::cout << std::endl
 				  << "***** client request *****" << std::endl
 				  << std::endl;
-		std::cout << buffer;
+		std::cout << client.request;
 		std::cout << "***** client request over *****" << std::endl
 				  << std::endl;
+		mPollFdStruct[clientNum].events |= POLLOUT;
+		generateResponse(mPollFdStruct[clientNum].fd);
+		client.request.erase();
 	}
 }
 
@@ -161,6 +239,7 @@ void WebServer::acceptConnection()
 // ifstream sets input stream to a file, ostringstream reads the entire file
 // using rdbuf() body is the html file contents, response is some information
 // plus the body
+// change test.html to point to a default page of some kind
 std::string WebServer::defaultResponse()
 {
 	std::ifstream htmlFile("test.html");
@@ -174,13 +253,11 @@ std::string WebServer::defaultResponse()
 	return response.str();
 }
 
-// send data to client
-void WebServer::sendResponse()
+void WebServer::generateResponse(int clientFd)
 {
+	ClientState &client = mClients[clientFd];
+	ssize_t bytes = 0;
 	// CGI demo code, currently overwriting the default response message
-	int bytesSent;
-	int totalBytes = 0;
-
 	// to determine if a cgi script needs to be run or not, we need to check if
 	// the requested file ends in .py etc, or if the requested file is in the
 	// cgi-bin folder
@@ -189,46 +266,55 @@ void WebServer::sendResponse()
 	{
 		ResponseBuilder dummyObj = ResponseBuilder();
 		CgiHandler cgiObj = CgiHandler();
-	
+
 		// executes a simple python script, here we would pass a container or
 		// something instead of a hardcoded string
 		cgiObj.execute("hello.py");
-		m_serverResponse = dummyObj.buildCgiResponse(cgiObj.getOutFd());
+		client.response = dummyObj.buildCgiResponse(cgiObj.getOutFd());
 	}
-	else {
-		m_serverResponse = defaultResponse();
+	else
+	{
+		client.response = defaultResponse();
 	}
 
 	std::cout << " ***** Server response ***** " << std::endl;
-	std::cout << m_serverResponse << std::endl;
+	std::cout << client.response << std::endl;
 	std::cout << " ***** Server response over ***** " << std::endl;
+}
+
+// send data to client
+bool WebServer::sendResponse(int clientFd)
+{
+	ClientState &client = mClients[clientFd];
+	ssize_t bytes = 0;
 
 	// send everything in m_serverResponse to client
 	std::cout << "attempting to send response to client" << std::endl;
-	while (totalBytes < m_serverResponse.size())
+	while (client.bytesSent < client.response.size())
 	{
-		bytesSent = send(m_newSocket, m_serverResponse.c_str(),
-		                 m_serverResponse.size(), 0);
-		if (bytesSent < 0)
+		bytes = send(clientFd, client.response.c_str() + client.bytesSent,
+		             client.response.size() - client.bytesSent, MSG_NOSIGNAL);
+		if (bytes < 0)
 		{
 			break;
 		}
-		totalBytes += bytesSent;
+		client.bytesSent += bytes;
 	}
-	if (totalBytes != m_serverResponse.size())
+	if (client.bytesSent != client.response.size())
 	{
 		std::cerr << "send() failed" << std::endl;
 	}
 	else
 	{
 		std::cout << "send() success!" << std::endl;
+		return true;
 	}
+	return false;
 }
 
-void WebServer::closeServer()
+void WebServer::closeServer() const
 {
-	close(m_socket);
-	close(m_newSocket);
+	close(mListenSocket);
 	std::cout << "destructor called, web server shutting down" << std::endl;
 }
 
@@ -237,3 +323,22 @@ void WebServer::closeServer()
 */
 
 /* ************************************************************************** */
+
+// Need to decide if this function should be a private function for this class
+// or perhaps place it in a utils.cpp file for better readability
+bool setNonBlockingFlag(int socketFd)
+{
+	int flags = fcntl(socketFd, F_GETFL, 0);
+	if (flags == -1)
+	{
+		std::cerr << "get flag fcntl operation failed" << std::endl;
+		return false;
+	}
+	int status = fcntl(socketFd, F_SETFL, flags | O_NONBLOCK);
+	if (status == -1)
+	{
+		std::cerr << "set flag fcntl operation failed" << std::endl;
+		return false;
+	}
+	return true;
+}

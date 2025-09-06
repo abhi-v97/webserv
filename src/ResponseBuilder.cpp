@@ -64,7 +64,6 @@ std::string ResponseBuilder::buildCgiResponse(int pipeOutFd)
 
 	while (len > 0)
 	{
-		std::cout << buffer << std::endl;
 		body << buffer;
 		len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	}
