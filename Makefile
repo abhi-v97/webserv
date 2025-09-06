@@ -9,7 +9,9 @@ SRC_DIR = src
 INC_DIR = inc
 
 SRC =		src/main.cpp \
-			src/WebServer.cpp
+			src/WebServer.cpp \
+			src/CgiHandler.cpp \
+			src/ResponseBuilder.cpp
 
 OBJS = ${SRC:${SRC_DIR}/%.cpp=${OBJ_DIR}/%.o}
 
