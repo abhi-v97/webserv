@@ -47,17 +47,14 @@ private:
 	std::string mIpAddress;
 	int mPort;
 	int mListenSocket;
-	int mClientCount;
 	struct sockaddr_in mSocketAddress;
 	unsigned int mSocketAdddressLen;
 	std::map<int, ClientState> mClients;
-	// pollfd *mPollFdStruct;
 	std::vector<pollfd> mPollFdVector;
 };
 
 std::ostream &operator<<(std::ostream &outf, const WebServer &src);
 
-// testing, function will be used to change socket_fd to nonblocking
 bool setNonBlockingFlag(int socketFd);
 
 #endif /* ******************************************************* WEBSERVER_H  \

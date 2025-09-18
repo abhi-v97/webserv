@@ -1,5 +1,4 @@
 #include <cerrno>
-#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h> // used for fcntl(), believe it or not
@@ -21,21 +20,19 @@
 */
 
 WebServer::WebServer()
-	: mPort(), mListenSocket(), mClientCount(0), mSocketAddress(),
-	  mSocketAdddressLen()
+	: mPort(), mListenSocket(), mSocketAddress(), mSocketAdddressLen()
 {
 }
 
 WebServer::WebServer(const WebServer &src)
-	: mPort(), mListenSocket(), mClientCount(0), mSocketAddress(),
-	  mSocketAdddressLen()
+	: mPort(), mListenSocket(), mSocketAddress(), mSocketAdddressLen()
 {
 	(void)src;
 }
 
 WebServer::WebServer(std::string ipAddress, int port)
-	: mIpAddress(ipAddress), mPort(port), mListenSocket(), mClientCount(0),
-	  mSocketAddress(), mSocketAdddressLen(sizeof(mSocketAddress))
+	: mIpAddress(ipAddress), mPort(port), mListenSocket(), mSocketAddress(),
+	  mSocketAdddressLen(sizeof(mSocketAddress))
 {
 	mSocketAddress.sin_family = AF_INET;
 	mSocketAddress.sin_port = htons(mPort);
@@ -125,8 +122,7 @@ int WebServer::startServer()
 // back (test.html for now). Then it shuts down.
 void WebServer::startListen()
 {
-
-	if (listen(mListenSocket, 1) < 0)
+	if (listen(mListenSocket, 8) < 0)
 	{
 		std::cerr << "listen() failed" << std::strerror(errno) << std::endl;
 		return;
@@ -136,13 +132,10 @@ void WebServer::startListen()
 
 	struct pollfd listenStruct = {mListenSocket, POLLIN};
 	mPollFdVector.push_back(listenStruct);
-	// add listening socket to pollfd struct so poll() can monitor it
-	// mPollFdVector[0].fd = mListenSocket;
-	// mPollFdVector[0].events = POLLIN;
 	while (true)
 	{
 		int pollNum = poll(mPollFdVector.data(), mPollFdVector.size(), 1);
-		for (int i = mPollFdVector.size() - 1; i >= 0; i--)
+		for (int i = static_cast<int>(mPollFdVector.size()) - 1; i >= 0; i--)
 		{
 			if (mPollFdVector[i].fd == mListenSocket &&
 			    (mPollFdVector[i].revents & POLLIN))
@@ -176,11 +169,6 @@ void WebServer::acceptConnection()
 {
 	int newSocket = 0;
 
-	// if (mClientCount > MAX_CLIENTS)
-	// {
-	// 	std::cerr << "too many connections, for now" << std::endl;
-	// 	exit(1);
-	// }
 	newSocket =
 		accept(mListenSocket, (sockaddr *)&mSocketAddress, &mSocketAdddressLen);
 	if (newSocket < 0)
@@ -191,7 +179,6 @@ void WebServer::acceptConnection()
 
 	// update the pollfd struct
 	struct pollfd newClient = {newSocket, POLLIN};
-	mClientCount++;
 	mPollFdVector.push_back(newClient);
 
 	// update clientState with new client
@@ -215,14 +202,15 @@ void WebServer::parseRequest(int clientNum)
 	}
 	else if (client.bytesRead == 0)
 	{
+		// request of zero bytes received, shut down the connection
+		// TODO: other conditions and revents can also require us to close the
+		// connection; turn this into a function, find all other applicable
+		// revents
 		std::cerr << "recv(): zero bytes received, connection "
 				  << mPollFdVector[clientNum].fd << " closed" << std::endl;
-		// remove the client from pollfd struct by overwriting it
-		// with the last item
 		close(mPollFdVector[clientNum].fd);
 		mClients.erase(mPollFdVector[clientNum].fd);
 		mPollFdVector.erase(mPollFdVector.begin() + clientNum);
-		mClientCount--;
 	}
 	else if (client.request.find("\r\n\r\n") != std::string::npos)
 	{
@@ -299,7 +287,14 @@ bool WebServer::sendResponse(int clientFd)
 		             client.response.size() - client.bytesSent, MSG_NOSIGNAL);
 		if (bytes < 0)
 		{
-			break;
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+			{
+				break;
+			}
+			else
+			{
+				return false;
+			}
 		}
 		client.bytesSent += bytes;
 	}
