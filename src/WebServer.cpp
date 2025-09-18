@@ -1,4 +1,5 @@
 #include <cerrno>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h> // used for fcntl(), believe it or not
@@ -21,21 +22,20 @@
 
 WebServer::WebServer()
 	: mPort(), mListenSocket(), mClientCount(0), mSocketAddress(),
-	  mSocketAdddressLen(), mPollFdStruct()
+	  mSocketAdddressLen()
 {
 }
 
 WebServer::WebServer(const WebServer &src)
 	: mPort(), mListenSocket(), mClientCount(0), mSocketAddress(),
-	  mSocketAdddressLen(), mPollFdStruct()
+	  mSocketAdddressLen()
 {
 	(void)src;
 }
 
 WebServer::WebServer(std::string ipAddress, int port)
 	: mIpAddress(ipAddress), mPort(port), mListenSocket(), mClientCount(0),
-	  mSocketAddress(), mSocketAdddressLen(sizeof(mSocketAddress)),
-	  mPollFdStruct()
+	  mSocketAddress(), mSocketAdddressLen(sizeof(mSocketAddress))
 {
 	mSocketAddress.sin_family = AF_INET;
 	mSocketAddress.sin_port = htons(mPort);
@@ -125,6 +125,7 @@ int WebServer::startServer()
 // back (test.html for now). Then it shuts down.
 void WebServer::startListen()
 {
+
 	if (listen(mListenSocket, 1) < 0)
 	{
 		std::cerr << "listen() failed" << std::strerror(errno) << std::endl;
@@ -133,32 +134,34 @@ void WebServer::startListen()
 	std::cout << "Server now listening on: " << mIpAddress
 			  << ", port: " << mPort << std::endl;
 
+	struct pollfd listenStruct = {mListenSocket, POLLIN};
+	mPollFdVector.push_back(listenStruct);
 	// add listening socket to pollfd struct so poll() can monitor it
-	mPollFdStruct[0].fd = mListenSocket;
-	mPollFdStruct[0].events = POLLIN;
+	// mPollFdVector[0].fd = mListenSocket;
+	// mPollFdVector[0].events = POLLIN;
 	while (true)
 	{
-		int pollNum = poll(mPollFdStruct, mClientCount + 1, 1);
-		for (int i = 0; i < mClientCount + 1; i++)
+		int pollNum = poll(mPollFdVector.data(), mPollFdVector.size(), 1);
+		for (int i = mPollFdVector.size() - 1; i >= 0; i--)
 		{
-			if (mPollFdStruct[i].fd == mListenSocket &&
-			    (mPollFdStruct[i].revents & POLLIN))
+			if (mPollFdVector[i].fd == mListenSocket &&
+			    (mPollFdVector[i].revents & POLLIN))
 			{
 				// if this condition is true, it means we have a new connection
 				acceptConnection();
 			}
-			else if (mPollFdStruct[i].revents & POLLIN)
+			else if (mPollFdVector[i].revents & POLLIN)
 			{
 				// this means we're now dealing with a client
 				parseRequest(i);
 			}
-			if (mPollFdStruct[i].revents & POLLOUT)
+			if (mPollFdVector[i].revents & POLLOUT)
 			{
 				// if we have enough data, send reponse to client
-				if (sendResponse(mPollFdStruct[i].fd))
+				if (sendResponse(mPollFdVector[i].fd))
 				{
 					// if all data has been sent, remove POLLOUT flag
-					mPollFdStruct[i].events &= ~POLLOUT;
+					mPollFdVector[i].events &= ~POLLOUT;
 				}
 			}
 		}
@@ -173,11 +176,11 @@ void WebServer::acceptConnection()
 {
 	int newSocket = 0;
 
-	if (mClientCount > MAX_CLIENTS)
-	{
-		std::cerr << "too many connections, for now" << std::endl;
-		exit(1);
-	}
+	// if (mClientCount > MAX_CLIENTS)
+	// {
+	// 	std::cerr << "too many connections, for now" << std::endl;
+	// 	exit(1);
+	// }
 	newSocket =
 		accept(mListenSocket, (sockaddr *)&mSocketAddress, &mSocketAdddressLen);
 	if (newSocket < 0)
@@ -187,9 +190,9 @@ void WebServer::acceptConnection()
 	std::cout << "accepted client, newSocket fd: " << newSocket << std::endl;
 
 	// update the pollfd struct
+	struct pollfd newClient = {newSocket, POLLIN};
 	mClientCount++;
-	mPollFdStruct[mClientCount].fd = newSocket;
-	mPollFdStruct[mClientCount].events = POLLIN;
+	mPollFdVector.push_back(newClient);
 
 	// update clientState with new client
 	ClientState state;
@@ -201,10 +204,10 @@ void WebServer::acceptConnection()
 
 void WebServer::parseRequest(int clientNum)
 {
-	ClientState &client = mClients[mPollFdStruct[clientNum].fd];
+	ClientState &client = mClients[mPollFdVector[clientNum].fd];
 	char buffer[4096] = {0};
 
-	client.bytesRead = recv(mPollFdStruct[clientNum].fd, buffer, 4096, 0);
+	client.bytesRead = recv(mPollFdVector[clientNum].fd, buffer, 4096, 0);
 	client.request += buffer;
 	if (client.bytesRead < 0)
 	{
@@ -213,24 +216,24 @@ void WebServer::parseRequest(int clientNum)
 	else if (client.bytesRead == 0)
 	{
 		std::cerr << "recv(): zero bytes received, connection "
-				  << mPollFdStruct[clientNum].fd << " closed" << std::endl;
+				  << mPollFdVector[clientNum].fd << " closed" << std::endl;
 		// remove the client from pollfd struct by overwriting it
 		// with the last item
-		mClients.erase(mPollFdStruct[clientNum].fd);
-		close(mPollFdStruct[clientNum].fd);
-		mPollFdStruct[clientNum] = mPollFdStruct[mClientCount];
+		close(mPollFdVector[clientNum].fd);
+		mClients.erase(mPollFdVector[clientNum].fd);
+		mPollFdVector.erase(mPollFdVector.begin() + clientNum);
 		mClientCount--;
 	}
 	else if (client.request.find("\r\n\r\n") != std::string::npos)
 	{
-		std::cout << std::endl
-				  << "***** client request *****" << std::endl
-				  << std::endl;
-		std::cout << client.request;
-		std::cout << "***** client request over *****" << std::endl
-				  << std::endl;
-		mPollFdStruct[clientNum].events |= POLLOUT;
-		generateResponse(mPollFdStruct[clientNum].fd);
+		// std::cout << std::endl
+		// 		  << "***** client request *****" << std::endl
+		// 		  << std::endl;
+		// std::cout << client.request;
+		// std::cout << "***** client request over *****" << std::endl
+		// 		  << std::endl;
+		mPollFdVector[clientNum].events |= POLLOUT;
+		generateResponse(mPollFdVector[clientNum].fd);
 		client.request.erase();
 	}
 }
@@ -277,9 +280,9 @@ void WebServer::generateResponse(int clientFd)
 		client.response = defaultResponse();
 	}
 
-	std::cout << " ***** Server response ***** " << std::endl;
-	std::cout << client.response << std::endl;
-	std::cout << " ***** Server response over ***** " << std::endl;
+	// std::cout << " ***** Server response ***** " << std::endl;
+	// std::cout << client.response << std::endl;
+	// std::cout << " ***** Server response over ***** " << std::endl;
 }
 
 // send data to client

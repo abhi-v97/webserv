@@ -8,11 +8,9 @@
 #include <map>
 #include <poll.h> // used for poll()
 #include <string>
+#include <sys/poll.h>
 #include <sys/socket.h>
-
-// used to configure poll()
-// TODO: rejig the struct to be dynamic
-#define MAX_CLIENTS 10
+#include <vector>
 
 struct ClientState
 {
@@ -39,7 +37,7 @@ public:
 	void startListen();
 	void acceptConnection();
 	
-	void parseRequest(int i);
+	void parseRequest(int clientNum);
 
 	static std::string defaultResponse();
 	bool sendResponse(int clientFd);
@@ -53,7 +51,8 @@ private:
 	struct sockaddr_in mSocketAddress;
 	unsigned int mSocketAdddressLen;
 	std::map<int, ClientState> mClients;
-	struct pollfd mPollFdStruct[MAX_CLIENTS];
+	// pollfd *mPollFdStruct;
+	std::vector<pollfd> mPollFdVector;
 };
 
 std::ostream &operator<<(std::ostream &outf, const WebServer &src);
