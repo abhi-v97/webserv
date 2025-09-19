@@ -40,6 +40,7 @@ WebServer::WebServer(std::string ipAddress, int port)
 {
 	mSocketAddress.sin_family = AF_INET;
 	mSocketAddress.sin_port = htons(mPort);
+	// TODO: inet_addr not an allowed function?
 	mSocketAddress.sin_addr.s_addr = inet_addr(mIpAddress.c_str());
 
 	// setup signal handling
@@ -177,6 +178,8 @@ void WebServer::acceptConnection()
 {
 	int newSocket = 0;
 
+	// TODO: seems like you're recycling mSocketAddress... is the info in there
+	// relevant? Do you need to malloc it for each individual client
 	newSocket =
 		accept(mListenSocket, (sockaddr *)&mSocketAddress, &mSocketAdddressLen);
 	if (newSocket < 0)
@@ -184,6 +187,12 @@ void WebServer::acceptConnection()
 		std::cerr << "accept() failed" << std::strerror(errno) << std::endl;
 	}
 	std::cout << "accepted client, newSocket fd: " << newSocket << std::endl;
+	std::cout << "client ip address: "
+			  << int(mSocketAddress.sin_addr.s_addr & 0xFF) << "."
+			  << int((mSocketAddress.sin_addr.s_addr & 0xFF00) >> 8) << "."
+			  << int((mSocketAddress.sin_addr.s_addr & 0xFF0000) >> 16) << "."
+			  << int((mSocketAddress.sin_addr.s_addr & 0xFF000000) >> 24)
+			  << std::endl;
 
 	// update the pollfd struct
 	struct pollfd newClient = {newSocket, POLLIN};
