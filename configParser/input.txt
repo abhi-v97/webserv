@@ -1,0 +1,137 @@
+server
+{
+    listen 8080;
+    root /var/www/html;
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+}
+
+server
+{
+    listen 8080;
+    root /var/www/html;
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+}
+
+server
+{
+    listen 8080;
+    root /var/www/html;
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+}
+
+server
+{
+    listen 8080;
+    root /var/www/html;
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+}
+
+server
+{
+    listen 8080;
+    root /var/www/html;
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+}
+
+server
+{
+    listen 8080;
+    root /var/www/html;
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+}
+
+server
+{
+    listen 8080;
+    root /var/www/html;
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+}
+
+server
+{
+    listen 8080;
+    root /var/www/html;
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+}
+
+server
+{
+    listen 8080;
+    root /var/www/html;
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+
+    location /images
+    {
+        root /var/www/images;
+        autoindex on;
+        allow_methods GET POST;
+    }
+}
