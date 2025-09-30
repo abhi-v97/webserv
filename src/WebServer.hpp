@@ -36,7 +36,7 @@ public:
 
 	void startListen();
 	void acceptConnection();
-	
+
 	void parseRequest(int clientNum);
 
 	static std::string defaultResponse();
@@ -51,11 +51,13 @@ private:
 	unsigned int mSocketAdddressLen;
 	std::map<int, ClientState> mClients;
 	std::vector<pollfd> mPollFdVector;
+	int mSignal;
 };
 
 std::ostream &operator<<(std::ostream &outf, const WebServer &src);
 
 bool setNonBlockingFlag(int socketFd);
+void signalHandler(int sig);
 
 #endif /* ******************************************************* WEBSERVER_H  \
         */

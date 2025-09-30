@@ -1,4 +1,5 @@
 #include <cerrno>
+#include <csignal> // used for std::signal
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h> // used for fcntl(), believe it or not
@@ -12,6 +13,9 @@
 #include "CgiHandler.hpp"
 #include "ResponseBuilder.hpp"
 #include "WebServer.hpp"
+
+// global variable used for signals
+int gSignal = 0;
 
 // TODO: the formatter insists on rearranging header files to be in ascending
 // orde
@@ -38,6 +42,10 @@ WebServer::WebServer(std::string ipAddress, int port)
 	mSocketAddress.sin_port = htons(mPort);
 	mSocketAddress.sin_addr.s_addr = inet_addr(mIpAddress.c_str());
 
+	// setup signal handling
+	// TODO: how should signals work with multiple servers?
+	std::signal(SIGINT, SIG_IGN);
+	std::signal(SIGINT, signalHandler);
 	if (startServer() > 0)
 	{
 		std::cerr << "cannot connect to socket: " << mPort << ": "
@@ -132,7 +140,7 @@ void WebServer::startListen()
 
 	struct pollfd listenStruct = {mListenSocket, POLLIN};
 	mPollFdVector.push_back(listenStruct);
-	while (true)
+	while (gSignal == 0)
 	{
 		int pollNum = poll(mPollFdVector.data(), mPollFdVector.size(), 1);
 		for (int i = static_cast<int>(mPollFdVector.size()) - 1; i >= 0; i--)
@@ -312,7 +320,10 @@ bool WebServer::sendResponse(int clientFd)
 
 void WebServer::closeServer() const
 {
+	std::signal(SIGINT, SIG_DFL);
 	close(mListenSocket);
+	for (int i = 0; i < mPollFdVector.size(); i++)
+		close(mPollFdVector[i].fd);
 	std::cout << "destructor called, web server shutting down" << std::endl;
 }
 
@@ -339,4 +350,10 @@ bool setNonBlockingFlag(int socketFd)
 		return false;
 	}
 	return true;
+}
+
+// signal handler function
+void signalHandler(int sig)
+{
+	gSignal = sig;
 }

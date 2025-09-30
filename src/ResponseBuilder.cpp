@@ -60,6 +60,7 @@ std::string ResponseBuilder::buildCgiResponse(int pipeOutFd)
 	std::ostringstream response;
 
 	char buffer[BUFFER_SIZE];
+	memset(buffer, 0, BUFFER_SIZE);
 	ssize_t len = read(pipeOutFd, buffer, BUFFER_SIZE);
 
 	while (len > 0)

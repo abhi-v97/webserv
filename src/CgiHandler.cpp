@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <csignal>
 
 #include "CgiHandler.hpp"
+#include "WebServer.hpp"
 
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
@@ -57,7 +59,7 @@ std::ostream &operator<<(std::ostream &outf, const CgiHandler &obj)
 void CgiHandler::execute(std::string cgiName)
 {
 	std::string cgiFile = ("cgi-bin/" + cgiName);
-	char *cwd = getcwd(NULL, 0);
+	// char *cwd = getcwd(NULL, 0);
 
 	if (pipe(this->m_fd) < 0)
 	{
@@ -69,6 +71,11 @@ void CgiHandler::execute(std::string cgiName)
 	if (this->m_PID == 0)
 	{
 		// child
+		
+		// set sigint to default action in child process
+		std::signal(SIGINT, SIG_DFL);
+		
+		
 		close(this->m_fd[0]);
 		dup2(this->m_fd[1], STDOUT_FILENO);
 		close(this->m_fd[1]);
@@ -83,8 +90,17 @@ void CgiHandler::execute(std::string cgiName)
 	else
 	{
 		// parent
+	
+		// ignore sigint while child process is running
+		std::signal(SIGINT, SIG_IGN);
+		
 		waitpid(-1, NULL, 0);
+		
+		// reset sigint after cgi process is over
+		std::signal(SIGINT, signalHandler);
+
 		close(this->m_fd[1]);
+		close(this->m_fd[0]);
 	}
 }
 
