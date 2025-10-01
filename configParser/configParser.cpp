@@ -88,6 +88,22 @@ ServerConfig	configParser::parseServerBlock()
 			LocationConfig loc = parseLocationBlock();
 			cfg.locations.push_back(loc);
 		}
+		else if (current.type == WORD && current.value == "error_page")
+		{
+			advance();
+			if (current.type != WORD)
+				throw std::runtime_error("Expected error code");
+			int	code;
+			std::stringstream ss(current.value);
+			ss >> code;
+			advance();
+			if (current.type != WORD)
+				throw std::runtime_error("Expected error page path");
+			std::string path = current.value;
+			advance();
+			expect(SEMICOLON);
+			cfg.errorPages[code] = path;
+		}
 		else
 			throw std::runtime_error("Unknown directive: " + current.value);
 	}

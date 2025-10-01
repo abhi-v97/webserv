@@ -12,18 +12,18 @@
 #include "configLexer.hpp"
 
 struct LocationConfig {
-	std::string 				path;
+	std::vector<std::string>	methods;
+	std::string 				redirect;
 	std::string 				root;
 	bool						autoindex;
-	std::vector<std::string>	methods;
 	std::string 				index;
 	std::string 				uploadDir;
-	std::string 				redirect;
+	std::string 				path;
 };
 
 struct ServerConfig {
-	std::vector<int> 			listenPorts;
 	std::string					root;
+	std::vector<int> 			listenPorts;
 	std::map<int, std::string>	errorPages;
 	size_t						clientMaxBodySize;
 	std::vector<LocationConfig>	locations;
