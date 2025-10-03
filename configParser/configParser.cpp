@@ -104,6 +104,16 @@ ServerConfig	configParser::parseServerBlock()
 			expect(SEMICOLON);
 			cfg.errorPages[code] = path;
 		}
+		else if (current.type == WORD && current.value == "client_max_body_size")
+		{
+			advance();
+			if (current.type != WORD)
+				throw std::runtime_error("Expected max body size value");
+			std::stringstream ss(current.value);
+			ss >> cfg.clientMaxBodySize;
+			advance();
+			expect(SEMICOLON);
+		}
 		else
 			throw std::runtime_error("Unknown directive: " + current.value);
 	}

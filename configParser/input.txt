@@ -1,140 +1,52 @@
 server
 {
     listen 8080;
+	listen 8181;
+	listen 8282;
+	listen 8383;
+	listen 8484;
     root /var/www/html;
+	client_max_body_size 555555555555555555;
+	error_page 407 /hghg/fgdfgdfg/sggrgrg/belcher;
+	error_page 409 /sgsrg/regfdgfdehetrhy/ehgdag/scott;
+	error_page 402 /fgrgrr/sgrgrgs/grgrgg/belcher;
 
     location /images
     {
+		return /sggfg/fgdsgewgwg/fhdhdhfd/dagdghgg/rgregregreher;
         root /var/www/images;
-        autoindex on;
+        autoindex off;
+		index /grgrgr/regregergre/gregregerherhtrhuj6/scott;
         allow_methods GET POST;
+		upload_dir /ewfg/ewgweg/ewgweg/ewgewgewg/ewgegeg/ewgewgeg;
+    }
+    location /images
+    {
+		return /sggfg/fgdsgewgwg/fhdhdhfd/dagdghgg/rgregregreher;
+        root /var/www/images;
+        autoindex off;
+		index /grgrgr/regregergre/gregregerherhtrhuj6/scott;
+        allow_methods GET POST;
+		upload_dir /ewfg/ewgweg/ewgweg/ewgewgewg/ewgegeg/ewgewgeg;
+    }
+    location /images
+    {
+		return /sggfg/fgdsgewgwg/fhdhdhfd/dagdghgg/rgregregreher;
+        root /var/www/images;
+        autoindex off;
+		index /grgrgr/regregergre/gregregerherhtrhuj6/scott;
+        allow_methods GET POST;
+		upload_dir /ewfg/ewgweg/ewgweg/ewgewgewg/ewgegeg/ewgewgeg;
+    }
+    location /images
+    {
+		return /sggfg/fgdsgewgwg/fhdhdhfd/dagdghgg/rgregregreher;
+        root /var/www/images;
+        autoindex off;
+		index /grgrgr/regregergre/gregregerherhtrhuj6/scott;
+        allow_methods GET POST;
+		upload_dir /ewfg/ewgweg/ewgweg/ewgewgewg/ewgegeg/ewgewgeg;
     }
 }
 
-server
-{
-    listen 8080;
-    root /var/www/html;
 
-    location /images
-    {
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-}
-
-server
-{
-    listen 8080;
-    root /var/www/html;
-
-    location /images
-    {
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-}
-
-server
-{
-    listen 8080;
-    root /var/www/html;
-
-    location /images
-    {
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-}
-
-server
-{
-    listen 8080;
-    root /var/www/html;
-
-    location /images
-    {
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-}
-
-server
-{
-    listen 8080;
-    root /var/www/html;
-
-    location /images
-    {
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-}
-
-server
-{
-    listen 8080;
-    root /var/www/html;
-
-    location /images
-    {
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-}
-
-server
-{
-    listen 8080;
-    root /var/www/html;
-
-    location /images
-    {
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-}
-
-server
-{
-    listen 8080;
-    root /var/www/html;
-
-    location /images
-    {
-		index 1;
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-
-    location /images
-    {
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-
-    location /images
-    {
-		index 3;
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-
-    location /images
-    {
-		index 4;
-        root /var/www/images;
-        autoindex on;
-        allow_methods GET POST;
-    }
-}
