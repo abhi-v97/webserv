@@ -1,52 +1,63 @@
-server
-{
+# Website A
+server {
     listen 8080;
-	listen 8181;
-	listen 8282;
-	listen 8383;
-	listen 8484;
-    root /var/www/html;
-	client_max_body_size 555555555555555555;
-	error_page 407 /hghg/fgdfgdfg/sggrgrg/belcher;
-	error_page 409 /sgsrg/regfdgfdehetrhy/ehgdag/scott;
-	error_page 402 /fgrgrr/sgrgrgs/grgrgg/belcher;
+    listen 9090;
+    root /var/www/siteA;
+    # Custom error pages
+    error_page 404 /errors/404html;
+    error_page 500 /errors/500html;
+    error_page 403 /errors/403html;
 
-    location /images
-    {
-		return /sggfg/fgdsgewgwg/fhdhdhfd/dagdghgg/rgregregreher;
-        root /var/www/images;
-        autoindex off;
-		index /grgrgr/regregergre/gregregerherhtrhuj6/scott;
-        allow_methods GET POST;
-		upload_dir /ewfg/ewgweg/ewgweg/ewgewgewg/ewgegeg/ewgewgeg;
+    # Max request body size
+    client_max_body_size 100000000000000000000;
+
+    # Routes (locations)
+
+    # Public images folder
+    location /images {
+        root /var/www/siteA/images;
+        autoindex on;
+        index indexhtml;
+        allow_methods GET;
     }
-    location /images
-    {
-		return /sggfg/fgdsgewgwg/fhdhdhfd/dagdghgg/rgregregreher;
-        root /var/www/images;
+
+    # File uploads
+    location /upload {
+        root /var/www/siteA;
+        allow_methods POST;
+        upload_dir /var/www/siteA/uploads;
         autoindex off;
-		index /grgrgr/regregergre/gregregerherhtrhuj6/scott;
-        allow_methods GET POST;
-		upload_dir /ewfg/ewgweg/ewgweg/ewgewgewg/ewgegeg/ewgewgeg;
     }
-    location /images
-    {
-		return /sggfg/fgdsgewgwg/fhdhdhfd/dagdghgg/rgregregreher;
-        root /var/www/images;
-        autoindex off;
-		index /grgrgr/regregergre/gregregerherhtrhuj6/scott;
-        allow_methods GET POST;
-		upload_dir /ewfg/ewgweg/ewgweg/ewgewgewg/ewgegeg/ewgewgeg;
+
+    # Redirect old URLs
+    location /old {
+        return http//examplecom/new;
     }
-    location /images
-    {
-		return /sggfg/fgdsgewgwg/fhdhdhfd/dagdghgg/rgregregreher;
-        root /var/www/images;
+
+    # Docs section
+    location /docs {
+        root /var/www/siteA/docs;
+        index indexhtml;
         autoindex off;
-		index /grgrgr/regregergre/gregregerherhtrhuj6/scott;
-        allow_methods GET POST;
-		upload_dir /ewfg/ewgweg/ewgweg/ewgewgewg/ewgegeg/ewgewgeg;
+        allow_methods GET;
     }
 }
+
+# Website B
+server {
+    listen 8000;
+    root /var/www/siteB;
+
+    error_page 404 /siteB_errors/404html;
+    client_max_body_size 5000000000000;
+
+    location /api {
+        root /var/www/siteB/api;
+        allow_methods GET POST DELETE;
+        index indexhtml;
+        autoindex off;
+    }
+}
+
 
 
