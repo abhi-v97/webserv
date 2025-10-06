@@ -190,9 +190,18 @@ LocationConfig	configParser::parseLocationBlock()
 		else if (current.value == "return")
 		{
 			advance();
-			loc.redirect = current.value;
+			if (current.type != WORD)
+				throw std::runtime_error("Expected error code");
+			int	code;
+			std::stringstream ss(current.value);
+			ss >> code;
+			advance();
+			if (current.type != WORD)
+				throw std::runtime_error("Expected return page path");
+			std::string returnPage = current.value;
 			advance();
 			expect(SEMICOLON);
+			loc.redirect[code] = returnPage;
 		}
 		else
 			throw std::runtime_error("Unknown directive in location: " + current.value);

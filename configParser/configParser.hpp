@@ -13,7 +13,7 @@
 
 struct LocationConfig {
 	std::vector<std::string>	methods;
-	std::string 				redirect;
+	std::map<int, std::string> 	redirect;
 	std::string 				root;
 	bool						autoindex;
 	std::string 				index;

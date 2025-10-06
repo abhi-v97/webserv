@@ -31,7 +31,12 @@ int main()
                 for (size_t m = 0; m < loc.methods.size(); m++)
                     std::cout << loc.methods[m] << " ";
                 std::cout << "\n";
-				std::cout << "    HTTP Redirect: " << loc.redirect << "\n";
+				std::cout << "    HTTP Redirect: " << std::endl;
+				for(std::map<int, std::string>::const_iterator it = loc.redirect.begin();
+ 			   		it != loc.redirect.end(); ++it)
+				{
+    				std::cout << "      " << it->first << " " << it->second << "\n";
+				}
                 std::cout << "    Root: " << loc.root << "\n";
                 std::cout << "    Autoindex: " << (loc.autoindex ? "on" : "off") << "\n";
 				std::cout << "    Index: " << loc.index << "\n";

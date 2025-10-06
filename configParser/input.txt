@@ -31,7 +31,7 @@ server {
 
     # Redirect old URLs
     location /old {
-        return http//examplecom/new;
+        return 555 http//examplecom/new;
     }
 
     # Docs section

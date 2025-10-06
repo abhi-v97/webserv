@@ -32,6 +32,25 @@
 		"system_error": "cpp",
 		"tuple": "cpp",
 		"type_traits": "cpp",
-		"typeinfo": "cpp"
+		"typeinfo": "cpp",
+		"cstdarg": "cpp",
+		"cstddef": "cpp",
+		"cstring": "cpp",
+		"array": "cpp",
+		"atomic": "cpp",
+		"bit": "cpp",
+		"deque": "cpp",
+		"unordered_map": "cpp",
+		"algorithm": "cpp",
+		"functional": "cpp",
+		"iterator": "cpp",
+		"memory": "cpp",
+		"memory_resource": "cpp",
+		"numeric": "cpp",
+		"optional": "cpp",
+		"random": "cpp",
+		"utility": "cpp",
+		"ranges": "cpp",
+		"span": "cpp"
 	}
 }
