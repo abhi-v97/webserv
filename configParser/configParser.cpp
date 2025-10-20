@@ -191,7 +191,6 @@ LocationConfig	configParser::parseLocationBlock()
 		}
 		else if (current.value == "return")
 		{
-			printf("hello\n");
 			advance();
 			if (current.type != WORD)
 				throw std::runtime_error("Expected error code");
