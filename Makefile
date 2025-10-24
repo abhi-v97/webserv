@@ -11,7 +11,10 @@ INC_DIR = inc
 SRC =		src/main.cpp \
 			src/WebServer.cpp \
 			src/CgiHandler.cpp \
-			src/ResponseBuilder.cpp
+			src/ResponseBuilder.cpp \
+			src/Logger.cpp \
+			src/configParser.cpp \
+			src/configLexer.cpp
 
 OBJS = ${SRC:${SRC_DIR}/%.cpp=${OBJ_DIR}/%.o}
 
@@ -32,6 +35,7 @@ clean:
 
 fclean: clean
 	rm -f ${NAME} 
+	rm -f *.log
 
 re: fclean all
 
