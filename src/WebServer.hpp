@@ -12,24 +12,33 @@
 #include <sys/socket.h>
 #include <vector>
 
+#include "Logger.hpp"
+
+/** \struct ClientState
+    Struct used to store client information
+*/
 struct ClientState
 {
-	int fd;
-	std::string response;
-	std::string request;
-	ssize_t bytesRead;
-	ssize_t bytesSent;
+	int fd;               /**< socket fd used to listen to client requests */
+	std::string response; /**< placeholder; stores client response in its
+	                        entirety */
+	std::string request;  /**< placeholder; stores client request */
+	ssize_t bytesRead;    /**< number of bytes read from a client request, which
+	                        allows requests to be read in chunks */
+	ssize_t bytesSent;    /**< bytes sent of the response, to allow the response
+	                        being sent in chunks */
+	std::string clientIp; /**< Ip address of client */
 };
 
+/** \class WebServer
+    Creates a server with a given IP address and port and handles client
+    requests.
+*/
 class WebServer
 {
 public:
-	WebServer();
-	WebServer(const WebServer &src);
 	WebServer(std::string ipAddress, int port);
 	~WebServer();
-
-	WebServer &operator=(const WebServer &rhs);
 
 	int startServer();
 	void closeServer() const;
@@ -44,17 +53,17 @@ public:
 	void generateResponse(int clientFd);
 
 private:
-	std::string mIpAddress;
-	int mPort;
-	int mListenSocket;
-	struct sockaddr_in mSocketAddress;
-	unsigned int mSocketAdddressLen;
-	std::map<int, ClientState> mClients;
-	std::vector<pollfd> mPollFdVector;
-	int mSignal;
+	std::string mIpAddress; /**< Server IP Address, stored as std::string*/
+	int mPort;              /**< Server listening port */
+	int mListenSocket;      /**< Server socket for incoming requests */
+	struct sockaddr_in mSocketAddress; /**< struct needed by poll() */
+	unsigned int mSocketAdddressLen;   /**< size of sockaddr_in struct */
+	std::map<int, ClientState>
+		mClients;                      /**< map container to hold client info */
+	std::vector<pollfd> mPollFdVector; /**< vector container to hold socket
+	                                     info for each connection*/
+	Logger *mLog;
 };
-
-std::ostream &operator<<(std::ostream &outf, const WebServer &src);
 
 bool setNonBlockingFlag(int socketFd);
 void signalHandler(int sig);

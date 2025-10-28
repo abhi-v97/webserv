@@ -1,13 +1,13 @@
 #include "WebServer.hpp"
-
-void log(const std::string &message)
-{
-	std::cout << message << std::endl;
-}
+#include "Logger.hpp"
+#include "configParser.hpp"
 
 int main()
 {
-	WebServer webServer = WebServer("127.0.0.1", 8080);
+	configParser parser("default.conf");
+	const ServerConfig& srv = parser.servers[0];
+
+	WebServer webServer = WebServer("127.0.0.1", srv.listenPorts[0]);
 	webServer.startListen();
 	return 0;
 }

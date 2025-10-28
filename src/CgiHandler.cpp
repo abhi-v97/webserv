@@ -100,7 +100,7 @@ void CgiHandler::execute(std::string cgiName)
 		std::signal(SIGINT, signalHandler);
 
 		close(this->m_fd[1]);
-		close(this->m_fd[0]);
+		// close(this->m_fd[0]);
 	}
 }
 

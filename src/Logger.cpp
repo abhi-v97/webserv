@@ -1,21 +1,30 @@
-
 #include <ctime>
-#include <iomanip>
+#include <sstream>
+#include <iostream>
+#include <ostream>
+
 #include "Logger.hpp"
+
+#define BUF_SIZE 50
+
+// static member init
+Logger *Logger::mLogger = NULL;
 
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-Logger::Logger(const std::string &logFileName)
+Logger::Logger()
 {
-	logFile.open(logFileName.c_str(), std::ios::app);
-}
+	std::time_t timeNow;
+	struct tm *timeStruct;
+	char buffer[BUF_SIZE];
 
-Logger::Logger( const Logger & src )
-{
+	std::time(&timeNow);
+	timeStruct = std::localtime(&timeNow);
+	std::strftime(buffer, BUF_SIZE, "%Y-%m-%d_%H:%M:%S.log", timeStruct);
+	Logger::mFile.open(buffer, std::ios::app);
 }
-
 
 /*
 ** -------------------------------- DESTRUCTOR --------------------------------
@@ -23,71 +32,93 @@ Logger::Logger( const Logger & src )
 
 Logger::~Logger()
 {
+	Logger::mFile.close();
+	delete mLogger;
 }
-
-
-/*
-** --------------------------------- OVERLOAD ---------------------------------
-*/
-
-Logger &				Logger::operator=( Logger const & rhs )
-{
-	//if ( this != &rhs )
-	//{
-		//this->_value = rhs.getValue();
-	//}
-	return *this;
-}
-
-std::ostream &			operator<<( std::ostream & o, Logger const & i )
-{
-	//o << "Value = " << i.getValue();
-	return o;
-}
-
 
 /*
 ** --------------------------------- METHODS ----------------------------------
 */
 
+Logger *Logger::getInstance()
+{
+	if (mLogger == NULL)
+	{
+		mLogger = new Logger();
+	}
+	return mLogger;
+}
+
+/**
+	Helper function which converts enum to string.
+*/
 std::string levelToString(LogLevel level)
 {
-	switch (level) {
+	switch (level)
+	{
 	case DEBUG:
-		return "DEBUG";
+		return "debug";
+	case NOTICE:
+		return "notice";
 	case INFO:
-		return "INFO";
+		return "info";
 	case WARNING:
-		return "WARNING";
+		return "warning";
 	case ERROR:
-		return "ERROR";
+		return "error";
 	case FATAL:
-		return "FATAL";
+		return "fatal";
 	}
-	return ("UNKNOWN");
+	return "unknown";
 }
 
-std::string getTimestamp(void) {
+/**
+	Helper function which gets the current timestamp
+*/
+std::string getTimestamp(void)
+{
 	std::time_t timeNow;
 	struct tm *timeStruct;
-	char buffer[50];
-	
+	char buffer[BUF_SIZE];
+
 	std::time(&timeNow);
 	timeStruct = std::localtime(&timeNow);
-	std::strftime(buffer, 50, "%Y-%m-%d %H:%M:%S ", timeStruct);
-	return (buffer);
+	std::strftime(buffer, BUF_SIZE, "%Y-%m-%d %H:%M:%S ", timeStruct);
+	return buffer;
 }
 
-void Logger::log(LogLevel level, const std::string &errorMsg)
+/**
+	\details
+	Ostringstream creates a std::string buffer where the log message is
+	first written. Then its forwarded to cout and logFile.
+*/
+void Logger::log(LogLevel level, const std::string &msg)
 {
-	logFile << " [ " << levelToString(level) << " ] ";
-	logFile << getTimestamp() << " : ";
-	logFile << errorMsg << std::endl;
+	static std::ostringstream buf;
+    buf.str("");
+    buf.clear();
+
+    buf << getTimestamp();
+    buf << "[" << levelToString(level) << "] : ";
+    buf << msg << '\n';
+
+    std::string line = buf.str();
+    mFile << line;
+    mFile.flush();
+    std::cout << line;
+    std::cout.flush();
+}
+
+void Logger::logFile(LogLevel level, const std::string &msg)
+{
+	mFile << getTimestamp();
+    mFile << "[" << levelToString(level) << "] : ";
+    mFile << msg << '\n';
+	mFile.flush();
 }
 
 /*
 ** --------------------------------- ACCESSOR ---------------------------------
 */
-
 
 /* ************************************************************************** */
