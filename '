@@ -5,7 +5,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <map>
-#include <netinet/in.h>
 #include <poll.h> // used for poll()
 #include <string>
 #include <sys/poll.h>
@@ -39,10 +38,10 @@ class WebServer
 {
 public:
 	WebServer(std::string ipAddress, int port);
-	WebServer(std::string ipAddress, const std::vector<ServerConfig> &srv);
+	WebServer(const ServerConfig &obj);
 	~WebServer();
 
-	int bindPort(sockaddr_in socketStruct);
+	int bindPort(int port);
 	void closeServer() const;
 
 	void startListen();
@@ -56,15 +55,14 @@ public:
 
 private:
 	std::string mIpAddress; /**< Server IP Address, stored as std::string*/
-	// int mPort;              /**< Server listening port */
-	// int mListenSocket; /**< Server socket for incoming requests */
+	int mPort;              /**< Server listening port */
+	int mListenSocket;      /**< Server socket for incoming requests */
 	// TODO: do you need to create and store a struct for listening sockets?
 	// Atm they are not being used outside of bindPort()
-	std::vector<int> mSocketVector;
 	std::vector<sockaddr_in>
-		mSocketAddressStruct; /**< Vector of sockaddr_in structs used to bind
+		socketAddressStruct; /**< Vector of sockaddr_in structs used to bind
 	                            server port and listening socket */
-	// struct sockaddr_in mSocketAddress; /**< struct needed by bind() */
+	struct sockaddr_in mSocketAddress; /**< struct needed by bind() */
 	std::map<int, ClientState>
 		mClients;                      /**< map container to hold client info */
 	std::vector<pollfd> mPollFdVector; /**< vector container to hold socket
