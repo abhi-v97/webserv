@@ -14,7 +14,8 @@ SRC =		src/main.cpp \
 			src/ResponseBuilder.cpp \
 			src/Logger.cpp \
 			src/configParser.cpp \
-			src/configLexer.cpp
+			src/configLexer.cpp \
+			src/RequestParser.cpp
 
 OBJS = ${SRC:${SRC_DIR}/%.cpp=${OBJ_DIR}/%.o}
 
