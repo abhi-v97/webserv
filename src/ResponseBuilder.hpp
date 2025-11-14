@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 
 class ResponseBuilder
 {
@@ -14,13 +15,16 @@ public:
 
 	ResponseBuilder &operator=(const ResponseBuilder &rhs);
 
+	void reset();
+
 	std::string buildResponse();
-	std::string buildCgiResponse(int pipeOutFd);
+	bool readCgiResponse(int pipeOutFd);
+
+	std::string getResponse();
 
 private:
+	std::stringstream mResponse;
 };
-
-std::ostream &operator<<(std::ostream &o, const ResponseBuilder &i);
 
 #endif /* ************************************************* RESPONSEBUILDER_H  \
         */
