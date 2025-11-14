@@ -260,7 +260,6 @@ void WebServer::parseRequest(int clientNum)
 		// incomplete header, wait for more data
 		if (headerEnd == std::string::npos)
 		{
-			parseRequest(clientNum);
 			return;
 		}
 
@@ -278,8 +277,8 @@ void WebServer::parseRequest(int clientNum)
 		{
 			generateResponse(clientNum);
 			requestObj.setParsingFinished(true);
-			// client.request.erase(0, headerEnd + 4); // remove header plus
-			// CRLF
+			client.request.erase(0, headerEnd + 4); // remove header plus CRLF
+			client.bytesSent = 0;
 
 			// continue to see if another request is ready
 			continue;
@@ -314,7 +313,7 @@ void WebServer::generateResponse(int clientNum)
 {
 	ClientState &client = mClients[mPollFdVector[clientNum].fd];
 	ssize_t bytes = 0;
-	int isCGI = 1;
+	int isCGI = 0;
 	if (isCGI)
 	{
 		ResponseBuilder dummyObj = ResponseBuilder();
@@ -334,6 +333,7 @@ void WebServer::generateResponse(int clientNum)
 	else
 	{
 		client.response = defaultResponse();
+		mPollFdVector[clientNum].events |= POLLOUT;
 	}
 }
 
