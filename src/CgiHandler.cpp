@@ -1,7 +1,7 @@
+#include <csignal>
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <csignal>
 
 #include "CgiHandler.hpp"
 #include "WebServer.hpp"
@@ -71,11 +71,10 @@ void CgiHandler::execute(std::string cgiName)
 	if (this->m_PID == 0)
 	{
 		// child
-		
+
 		// set sigint to default action in child process
 		std::signal(SIGINT, SIG_DFL);
-		
-		
+
 		close(this->m_fd[0]);
 		dup2(this->m_fd[1], STDOUT_FILENO);
 		close(this->m_fd[1]);
@@ -90,12 +89,13 @@ void CgiHandler::execute(std::string cgiName)
 	else
 	{
 		// parent
-	
+
 		// ignore sigint while child process is running
 		std::signal(SIGINT, SIG_IGN);
-		
-		waitpid(-1, NULL, 0);
-		
+
+		// TODO: test this, make a script that sleep for 3s and then executes
+		waitpid(-1, NULL, WNOHANG);
+
 		// reset sigint after cgi process is over
 		std::signal(SIGINT, signalHandler);
 

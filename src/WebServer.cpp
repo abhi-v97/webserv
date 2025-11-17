@@ -10,10 +10,10 @@
 #include <stdexcept>
 #include <sys/poll.h>
 #include <sys/socket.h>
-#include <unistd.h>
 
 #include "CgiHandler.hpp"
 #include "Logger.hpp"
+#include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
 #include "WebServer.hpp"
 #include "configParser.hpp"
@@ -205,10 +205,12 @@ void WebServer::startListen()
 			if (mPollFdVector[i].revents & POLLOUT)
 			{
 				// if we have enough data, send reponse to client
-				if (sendResponse(mPollFdVector[i].fd))
+				if (sendResponse(i))
 				{
 					// if all data has been sent, remove POLLOUT flag
 					mPollFdVector[i].events &= ~POLLOUT;
+					mClients[mPollFdVector[i].fd].parser.setParsingFinished(
+						false);
 				}
 			}
 		}
@@ -238,6 +240,12 @@ void WebServer::acceptConnection(int listenFd)
 	mLog->log(NOTICE, std::string("accepted client with fd: ") +
 	                      numToString(newSocket));
 
+	// set acceptd client socket to be non-blocking
+	if (!setNonBlockingFlag(newSocket))
+	{
+		mLog->log(WARNING, std::string("failed to set client as non-blocking"));
+	}
+
 	// get client IP from sockaddr struct, store it as std::string
 	std::ostringstream clientIp;
 	clientIp << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
@@ -259,6 +267,7 @@ void WebServer::acceptConnection(int listenFd)
 	state.bytesSent = 0;
 	state.fd = newSocket;
 	state.clientIp = clientIp.str();
+	state.parser = RequestParser();
 	mClients[newSocket] = state;
 }
 
@@ -269,33 +278,69 @@ void WebServer::acceptConnection(int listenFd)
 void WebServer::parseRequest(int clientNum)
 {
 	ClientState &client = mClients[mPollFdVector[clientNum].fd];
-	char buffer[4096] = {0};
 
-	client.bytesRead = recv(mPollFdVector[clientNum].fd, buffer, 4096, 0);
-	client.request += buffer;
-	if (client.bytesRead < 0)
+	char buffer[4096] = {0};
+	ssize_t bufferRead;
+	bufferRead = recv(mPollFdVector[clientNum].fd, buffer, 4096, 0);
+	if (bufferRead < 0)
 	{
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+		{
+			return;
+		}
 		mLog->log(WARNING, "failed to read client request");
+		return;
 	}
-	else if (client.bytesRead == 0)
+	if (bufferRead == 0)
 	{
 		// request of zero bytes received, shut down the connection
 		// TODO: other conditions and revents can also require us to close the
 		// connection; turn this into a function, find all other applicable
 		// revents
 		mLog->log(
-			WARNING,
+			INFO,
 			std::string("recv(): zero bytes received, closing connection ") +
 				numToString(mPollFdVector[clientNum].fd));
 		close(mPollFdVector[clientNum].fd);
 		mClients.erase(mPollFdVector[clientNum].fd);
 		mPollFdVector.erase(mPollFdVector.begin() + clientNum);
+		return;
 	}
-	else if (client.request.find("\r\n\r\n") != std::string::npos)
+
+	client.request.append(buffer, bufferRead);
+
+	// while loop for future addition of mutliple request handling
+	while (42)
 	{
-		mPollFdVector[clientNum].events |= POLLOUT;
-		generateResponse(mPollFdVector[clientNum].fd);
-		client.request.erase();
+		size_t headerEnd = client.request.find("\r\n\r\n");
+
+		// incomplete header, wait for more data
+		if (headerEnd == std::string::npos)
+		{
+			return;
+		}
+
+		RequestParser &requestObj = client.parser;
+
+		if (client.parser.getParsingFinished())
+		{
+			return;
+		}
+		// TODO: check for and fix repeated header parsing
+		requestObj.parse(client.request);
+		requestObj.setHeaderEnd(headerEnd);
+		if (requestObj.getMethod() != POST ||
+		    requestObj.parseBody(client.request))
+		{
+			generateResponse(clientNum);
+			requestObj.setParsingFinished(true);
+			client.request.erase(0, headerEnd + 4); // remove header plus CRLF
+			client.bytesSent = 0;
+
+			// continue to see if another request is ready
+			continue;
+		}
+		break;
 	}
 }
 
@@ -309,7 +354,7 @@ std::string WebServer::defaultResponse()
 	std::ostringstream response;
 
 	body << htmlFile.rdbuf();
-	response << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: "
+	response << "HTTP/1.1 201 OK\nContent-Type: text/html\nContent-Length: "
 			 << body.str().size() << "\n\n"
 			 << body.str();
 	return response.str();
@@ -319,25 +364,33 @@ std::string WebServer::defaultResponse()
     \brief Placeholder function, generates a dummy message as a response
     regardless of what the client requests
 
-    \param clientFd client socket FD to send the response to
+    \param clientNum client socket FD to send the response to
 */
-void WebServer::generateResponse(int clientFd)
+void WebServer::generateResponse(int clientNum)
 {
-	ClientState &client = mClients[clientFd];
+	ClientState &client = mClients[mPollFdVector[clientNum].fd];
 	ssize_t bytes = 0;
-	int isCGI = 1;
+	int isCGI = 0;
 	if (isCGI)
 	{
 		ResponseBuilder dummyObj = ResponseBuilder();
-		CgiHandler cgiObj = CgiHandler();
+		CgiHandler &cgiObj = client.cgiObj;
 
 		// TODO: change this to accept other CGI requests
 		cgiObj.execute("hello.py");
-		client.response = dummyObj.buildCgiResponse(cgiObj.getOutFd());
+		ResponseBuilder &responseObj = client.responseObj;
+
+		int outfd = client.cgiObj.getOutFd();
+		if (responseObj.readCgiResponse(outfd))
+		{
+			mPollFdVector[clientNum].events |= POLLOUT;
+		}
+		client.response = client.responseObj.getResponse();
 	}
 	else
 	{
 		client.response = defaultResponse();
+		mPollFdVector[clientNum].events |= POLLOUT;
 	}
 }
 
@@ -346,15 +399,14 @@ void WebServer::generateResponse(int clientFd)
 
     \param clientFd socket FD of the client is receiving the response
 */
-bool WebServer::sendResponse(int clientFd)
+bool WebServer::sendResponse(int clientNum)
 {
-	ClientState &client = mClients[clientFd];
+	ClientState &client = mClients[mPollFdVector[clientNum].fd];
 	ssize_t bytes = 0;
 
-	// send everything in m_serverResponse to client
 	while (client.bytesSent < client.response.size())
 	{
-		bytes = send(clientFd, client.response.c_str() + client.bytesSent,
+		bytes = send(client.fd, client.response.c_str() + client.bytesSent,
 		             client.response.size() - client.bytesSent, MSG_NOSIGNAL);
 		if (bytes < 0)
 		{
@@ -369,11 +421,8 @@ bool WebServer::sendResponse(int clientFd)
 		}
 		client.bytesSent += bytes;
 	}
-	if (client.bytesSent != client.response.size())
-	{
-		mLog->log(WARNING, "send() failed");
-	}
-	return false;
+	// return true if done, false if not yet finished
+	return client.bytesSent == client.response.size();
 }
 
 /*

@@ -1,10 +1,10 @@
+#include <cerrno>
 #include <fstream>
-#include <sstream>
 #include <unistd.h>
 
 #include "ResponseBuilder.hpp"
 
-# define BUFFER_SIZE 4096
+#define BUFFER_SIZE 4096
 
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
@@ -39,6 +39,16 @@ ResponseBuilder &ResponseBuilder::operator=(const ResponseBuilder &rhs)
 	return *this;
 }
 
+std::string ResponseBuilder::getResponse()
+{
+	return mResponse.str();
+}
+
+void ResponseBuilder::reset()
+{
+	mResponse.clear();
+}
+
 // simple code that grabs everything in a html file and appends it as "body" to
 // a stanard header line
 std::string ResponseBuilder::buildResponse()
@@ -54,31 +64,26 @@ std::string ResponseBuilder::buildResponse()
 	return response.str();
 }
 
-std::string ResponseBuilder::buildCgiResponse(int pipeOutFd)
+bool ResponseBuilder::readCgiResponse(int pipeOutFd)
 {
 	std::ostringstream body;
-	std::ostringstream response;
 
 	char buffer[BUFFER_SIZE];
 	memset(buffer, 0, BUFFER_SIZE);
-	ssize_t len = read(pipeOutFd, buffer, BUFFER_SIZE);
 
+	ssize_t len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	while (len > 0)
 	{
 		body << buffer;
 		len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	}
-	response << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: "
-			 << body.str().size() << "\n\n"
-			 << body.str();
-	return response.str();
-}
+	mResponse << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: "
+			  << body.str().size() << "\n\n"
+			  << body.str();
+	std::cout << mResponse.str() << std::endl;
 
-std::ostream &operator<<(std::ostream &outf, const ResponseBuilder &obj)
-{
-	// o << "Value = " << i.getValue();
-	(void) obj;
-	return outf;
+	// returns true if len isn't positive, meaning read is finished
+	return len <= 0;
 }
 
 /*
