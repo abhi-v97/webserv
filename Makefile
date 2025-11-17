@@ -1,8 +1,8 @@
 NAME = webserv
 
-CC = c++
+CC = g++
 CFLAGS = -g -std=c++98 -march=native
-# -Wall -Wextra -Werror 
+# -Wall -Wextra -Werror
 
 OBJ_DIR = obj
 SRC_DIR = src
@@ -35,7 +35,7 @@ clean:
 	rm -f ${OBJS}
 
 fclean: clean
-	rm -f ${NAME} 
+	rm -f ${NAME}
 	rm -f *.log
 
 re: fclean all

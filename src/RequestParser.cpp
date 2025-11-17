@@ -1,3 +1,4 @@
+#include <cctype>
 #include <fcntl.h>
 #include <iostream>
 #include <sstream>
@@ -57,9 +58,9 @@ size_t RequestParser::getContentLength()
 	}
 	else if (mMethod == POST)
 	{
-		if (mHeaderField.find("Content-Length") != mHeaderField.end())
+		if (mHeaderField.find("content-length") != mHeaderField.end())
 		{
-			std::stringstream lengthStream(mHeaderField["Content-Length"]);
+			std::stringstream lengthStream(mHeaderField["content-length"]);
 			lengthStream >> result;
 			if (result > MAX_BODY_IN_MEM)
 			{
@@ -154,6 +155,11 @@ void RequestParser::parse(const std::string &requestBuffer)
 		if (fieldName.find_first_of(" \t") != std::string::npos)
 		{
 			throw std::runtime_error("Field name contains whitespace");
+		}
+		for (int i = 0; i < fieldName.size(); i++)
+		{
+			fieldName[i] =
+				std::tolower(static_cast<unsigned char>(fieldName[i]));
 		}
 		// std::cout << "Field name: " << fieldName << "." << std::endl;
 
