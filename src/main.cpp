@@ -17,7 +17,7 @@ int main(int argc, char **argv)
 	configParser parser(configFile);
 	const ServerConfig &srv = parser.servers[0];
 
-	WebServer webServer = WebServer("127.0.0.1", srv.listenPorts[0]);
+	WebServer webServer = WebServer("127.0.0.1", parser.servers);
 	webServer.startListen();
 
 	// RequestParser test = RequestParser();

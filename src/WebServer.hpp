@@ -5,8 +5,8 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
 #include <map>
+#include <netinet/in.h>
 #include <poll.h> // used for poll()
 #include <string>
 #include <sys/poll.h>
@@ -30,6 +30,7 @@ static const size_t MAX_BODY_IN_MEM = static_cast<const size_t>(
 	16 * 1024); // body size to store as a buffer, 16kb for test
 static const size_t MAX_BODY_TOTAL =
 	static_cast<const size_t>(1 * 1024 * 1024); // 1mb max size for body
+#include "configParser.hpp"
 
 /** \struct ClientState
     Struct used to store client information
@@ -59,13 +60,14 @@ class WebServer
 {
 public:
 	WebServer(std::string ipAddress, int port);
+	WebServer(std::string ipAddress, const std::vector<ServerConfig> &srv);
 	~WebServer();
 
-	int startServer();
+	int bindPort(sockaddr_in socketStruct);
 	void closeServer() const;
 
 	void startListen();
-	void acceptConnection();
+	void acceptConnection(int socket);
 
 	void parseRequest(int clientNum);
 
@@ -75,10 +77,15 @@ public:
 
 private:
 	std::string mIpAddress; /**< Server IP Address, stored as std::string*/
-	int mPort;              /**< Server listening port */
-	int mListenSocket;      /**< Server socket for incoming requests */
-	struct sockaddr_in mSocketAddress; /**< struct needed by poll() */
-	unsigned int mSocketAdddressLen;   /**< size of sockaddr_in struct */
+	// int mPort;              /**< Server listening port */
+	// int mListenSocket; /**< Server socket for incoming requests */
+	// TODO: do you need to create and store a struct for listening sockets?
+	// Atm they are not being used outside of bindPort()
+	std::vector<int> mSocketVector;
+	std::vector<sockaddr_in>
+		mSocketAddressStruct; /**< Vector of sockaddr_in structs used to bind
+	                            server port and listening socket */
+	// struct sockaddr_in mSocketAddress; /**< struct needed by bind() */
 	std::map<int, ClientState>
 		mClients;                      /**< map container to hold client info */
 	std::vector<pollfd> mPollFdVector; /**< vector container to hold socket

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <netinet/in.h>
 #include <sstream>
+#include <stdexcept>
 #include <sys/poll.h>
 #include <sys/socket.h>
 
@@ -15,6 +16,9 @@
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
 #include "WebServer.hpp"
+#include "configParser.hpp"
+
+#define LISTEN_REQUESTS 8
 
 /** \var gSignal
     Global variable used to store signal information
@@ -25,23 +29,55 @@ int gSignal = 0;
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-WebServer::WebServer(std::string ipAddress, int port)
-	: mIpAddress(ipAddress), mPort(port), mListenSocket(), mSocketAddress(),
-	  mSocketAdddressLen(sizeof(mSocketAddress)), mLog(Logger::getInstance())
+WebServer::WebServer(std::string ipAddress, const std::vector<ServerConfig> &srv)
+	: mIpAddress(ipAddress), mLog(Logger::getInstance())
+
 {
-	mSocketAddress.sin_family = AF_INET;
-	mSocketAddress.sin_port = htons(mPort);
+	
+	for (std::vector<ServerConfig>::const_iterator it = srv.begin(); it != srv.end(); it++)
+	{
+		std::vector<int> ports = (*it).listenPorts;
+		for (std::vector<int>::const_iterator it = ports.begin();
+		     it != ports.end(); it++)
+		{
+			sockaddr_in socketAddress = sockaddr_in();
+			socketAddress.sin_family = AF_INET;
+			socketAddress.sin_port = htons(*it);
+			socketAddress.sin_addr.s_addr = inet_addr(mIpAddress.c_str());
+			if (bindPort(socketAddress) != 0)
+			{
+				mLog->log(NOTICE, "Failed to bind port: " + numToString(*it));
+				continue;
+			}
+			mSocketAddressStruct.push_back(socketAddress);
+		}
+	}
+	if (mSocketAddressStruct.size() < 1)
+	{
+		mLog->log(ERROR, "Failed to bind given ports");
+		throw std::runtime_error("No ports bound, server shutting down");
+	}
+}
+
+// old code, use it to initialise a single ip address + port combo
+WebServer::WebServer(std::string ipAddress, int port)
+	: mIpAddress(ipAddress), mLog(Logger::getInstance())
+{
+	sockaddr_in socketAddress = sockaddr_in();
+	socketAddress.sin_family = AF_INET;
+	socketAddress.sin_port = htons(port);
 	// TODO: inet_addr not an allowed function?
-	mSocketAddress.sin_addr.s_addr = inet_addr(mIpAddress.c_str());
+	socketAddress.sin_addr.s_addr = inet_addr(mIpAddress.c_str());
 
 	// setup signal handling
 	// TODO: how should signals work with multiple servers?
 	std::signal(SIGINT, SIG_IGN);
 	std::signal(SIGINT, signalHandler);
-	if (startServer() != 0)
+	if (bindPort(socketAddress) != 0)
 	{
 		mLog->log(NOTICE, "Failed to start server, shutting down");
 	}
+	mSocketAddressStruct.push_back(socketAddress);
 }
 
 /*
@@ -53,7 +89,10 @@ WebServer::~WebServer()
 	// TODO: segfaults, but probably not worth worrying about
 	mLog->log(NOTICE, "destructor called, web server shutting down");
 	std::signal(SIGINT, SIG_DFL);
-	close(mListenSocket);
+	for (size_t i = 0; i < mSocketVector.size(); i++)
+	{
+		close(mSocketVector.at(i));
+	}
 	for (int i = 0; i < mPollFdVector.size(); i++)
 	{
 		close(mPollFdVector[i].fd);
@@ -69,25 +108,27 @@ WebServer::~WebServer()
 
     creates the listening socket, sets it to nonblocking, and binds the socket
     to the server port
+
+    \param socketStruct sockaddr_in struct that contains listening port info
 */
-int WebServer::startServer()
+int WebServer::bindPort(sockaddr_in socketStruct)
 {
 	// set up the listening socket
-	mListenSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (mListenSocket < 0)
+	int mSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (mSocket < 0)
 	{
 		mLog->log(ERROR,
 		          std::string("socket() failed: ") + std::strerror(errno));
 		return 1;
 	}
 	mLog->log(NOTICE, std::string("Socket created with value: ") +
-	                      numToString(mListenSocket));
+	                      numToString(ntohs(socketStruct.sin_port)));
+
 	// OS doesn't immediately free the port, which causes web server to hang
 	// if you close and reopen it quickly. This tells our server that we can
 	// reuse the port.
 	int enable = 1;
-	if (setsockopt(mListenSocket, SOL_SOCKET, SO_REUSEADDR, &enable,
-	               sizeof(int)) < 0)
+	if (setsockopt(mSocket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
 	{
 		mLog->log(ERROR, std::string("setsockopt(SO_REUSEADDR) failed: ") +
 		                     std::strerror(errno));
@@ -95,17 +136,18 @@ int WebServer::startServer()
 	}
 
 	// set the socket to be non-blocking
-	setNonBlockingFlag(mListenSocket);
+	setNonBlockingFlag(mSocket);
 
 	// bind socket and server port
-	if (bind(mListenSocket, (sockaddr *)&mSocketAddress, mSocketAdddressLen) <
-	    0)
+	if (bind(mSocket, (sockaddr *)&socketStruct, sizeof(socketStruct)) < 0)
 	{
 		mLog->log(ERROR, std::string("bind() failed: ") + std::strerror(errno));
 		return 1;
 	}
 	mLog->log(NOTICE, std::string("bind success: ") + numToString(mIpAddress) +
-	                      std::string(":") + numToString(mPort));
+	                      std::string(":") +
+	                      numToString(socketStruct.sin_port));
+	mSocketVector.push_back(mSocket);
 	return 0;
 }
 
@@ -123,26 +165,37 @@ int WebServer::startServer()
 */
 void WebServer::startListen()
 {
-	if (listen(mListenSocket, 8) < 0)
+	mPollFdVector.reserve(mSocketVector.size());
+	for (int i = 0; i < mSocketVector.size(); i++)
 	{
-		mLog->log(ERROR,
-		          std::string("listen() failed: ") + std::strerror(errno));
-		return;
+		if (listen(mSocketVector.at(i), LISTEN_REQUESTS) < 0)
+		{
+			mLog->log(ERROR,
+			          std::string("listen() failed: ") + std::strerror(errno));
+			return;
+		}
+		struct pollfd listenStruct = {mSocketVector.at(i), POLLIN, 0};
+		mPollFdVector.push_back(listenStruct);
 	}
 
-	struct pollfd listenStruct = {mListenSocket, POLLIN};
-	mPollFdVector.push_back(listenStruct);
+	// listen ports get added before clients, so keep track of how many we have
+	const int listenCount = static_cast<int>(mSocketVector.size());
+
 	while (gSignal == 0)
 	{
-		int pollNum = poll(mPollFdVector.data(), mPollFdVector.size(), 1);
+		int pollNum = poll(mPollFdVector.data(),
+		                   static_cast<int>(mPollFdVector.size()), 1);
+		if (pollNum < 0)
+		{
+			mLog->log(ERROR,
+			          std::string("poll() failed: ") + std::strerror(errno));
+		}
 		for (int i = static_cast<int>(mPollFdVector.size()) - 1; i >= 0; i--)
 		{
-			// TODO: check for POLLHUP, event where client closes connection
-			if (mPollFdVector[i].fd == mListenSocket &&
-			    (mPollFdVector[i].revents & POLLIN))
+			if (i < listenCount && (mPollFdVector[i].revents & POLLIN))
 			{
 				// if this condition is true, it means we have a new connection
-				acceptConnection();
+				acceptConnection(mPollFdVector[i].fd);
 			}
 			else if (mPollFdVector[i].revents & POLLIN)
 			{
@@ -169,15 +222,16 @@ void WebServer::startListen()
 
     Accepts the client connection, then stores client info and updates the
     mClients container with new client
+
+    \param socket The listening socket that client used to contact the server
 */
-void WebServer::acceptConnection()
+void WebServer::acceptConnection(int listenFd)
 {
 	int newSocket = 0;
 	struct sockaddr_in clientAddr = {};
 	socklen_t clientLen = sizeof(clientAddr);
 
-	newSocket =
-		accept(mListenSocket, (sockaddr *)&clientAddr, &mSocketAdddressLen);
+	newSocket = accept(listenFd, (sockaddr *)&clientAddr, &clientLen);
 	if (newSocket < 0)
 	{
 		mLog->log(ERROR,
@@ -201,8 +255,11 @@ void WebServer::acceptConnection()
 			 << std::endl;
 
 	// update the pollfd struct
-	struct pollfd newClient = {newSocket, POLLIN};
+	struct pollfd newClient = {newSocket, POLLIN, 0};
 	mPollFdVector.push_back(newClient);
+
+	// set the socket to be non-blocking
+	setNonBlockingFlag(newSocket);
 
 	// update clientState with new client
 	ClientState state;
