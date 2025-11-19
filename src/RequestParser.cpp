@@ -11,7 +11,13 @@
 
 RequestParser::RequestParser()
 	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1),
-	  bodyExpected(0), bodyReceived(0), mHeaderEnd(0)
+	  bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mClientNum()
+{
+}
+
+RequestParser::RequestParser(int clientNum)
+	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1),
+	  bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mClientNum(clientNum)
 {
 }
 
@@ -210,7 +216,7 @@ bool RequestParser::parseBody(std::string &request)
 	{
 		std::string tempFile;
 
-		tempFile = "client_" + numToString(bodyFd) + ".tmp";
+		tempFile = "client_" + numToString(mClientNum) + ".tmp";
 		int flags = O_WRONLY | O_CREAT | O_TRUNC;
 		int fd = open(tempFile.c_str(), flags, 0644);
 		setNonBlockingFlag(fd);
@@ -233,7 +239,7 @@ bool RequestParser::parseBody(std::string &request)
 	if (bodyToFile)
 	{
 		ssize_t bytesWritten =
-			write(bodyFd, request.data() + mHeaderEnd + 4, bodyBufferSize);
+			write(bodyFd, request.data() + mHeaderEnd + 4 + bodyReceived, bodyBufferSize);
 		if (bytesWritten > 0)
 		{
 			bodyReceived += bytesWritten;
@@ -247,24 +253,16 @@ bool RequestParser::parseBody(std::string &request)
 	// check if all data has been parsed
 	if (bodyReceived >= bodyExpected)
 	{
-		parsingFinished = true;
-		request.erase(0, mHeaderEnd + 4); // remove header plus CRLF
+		request.erase(mHeaderEnd + 4, bodyReceived); // remove header plus CRLF
 
-		if (!bodyToFile)
-		{
-			request.erase(0, mHeaderEnd + 4 + bodyExpected);
-		}
-		else
+		if (bodyToFile)
 		{
 			close(bodyFd);
 			bodyFd = -1;
+			bodyToFile = false;
 		}
-
 		bodyExpected = 0;
 		bodyReceived = 0;
-		bodyToFile = false;
-		bodyFd = -1;
-
 		return true;
 	}
 	return false;

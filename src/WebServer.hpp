@@ -26,8 +26,9 @@ static const size_t MAX_REQUEST_LINE =
 static const size_t MAX_HEADER_FIELD =
 	static_cast<const size_t>(4 * 1024);    // 4kb
 static const size_t MAX_HEADERS_TOTAL = 16; // max num of header fields.
-static const size_t MAX_BODY_IN_MEM = static_cast<const size_t>(
-	16 * 1024); // body size to store as a buffer, 16kb for test
+static const size_t MAX_BODY_IN_MEM = 1;
+// static const size_t MAX_BODY_IN_MEM = static_cast<const size_t>(
+// 	16 * 1024); // body size to store as a buffer, 16kb for test
 static const size_t MAX_BODY_TOTAL =
 	static_cast<const size_t>(1 * 1024 * 1024); // 1mb max size for body
 #include "configParser.hpp"

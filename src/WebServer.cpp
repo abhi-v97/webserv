@@ -29,12 +29,13 @@ int gSignal = 0;
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-WebServer::WebServer(std::string ipAddress, const std::vector<ServerConfig> &srv)
+WebServer::WebServer(std::string ipAddress,
+                     const std::vector<ServerConfig> &srv)
 	: mIpAddress(ipAddress), mLog(Logger::getInstance())
 
 {
-	
-	for (std::vector<ServerConfig>::const_iterator it = srv.begin(); it != srv.end(); it++)
+	for (std::vector<ServerConfig>::const_iterator it = srv.begin();
+	     it != srv.end(); it++)
 	{
 		std::vector<int> ports = (*it).listenPorts;
 		for (std::vector<int>::const_iterator it = ports.begin();
@@ -267,7 +268,7 @@ void WebServer::acceptConnection(int listenFd)
 	state.bytesSent = 0;
 	state.fd = newSocket;
 	state.clientIp = clientIp.str();
-	state.parser = RequestParser();
+	state.parser = RequestParser(state.fd);
 	mClients[newSocket] = state;
 }
 

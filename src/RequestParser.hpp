@@ -15,6 +15,7 @@ class RequestParser
 {
 public:
 	RequestParser();
+	RequestParser(int clientNum);
 	~RequestParser();
 
 	std::map<std::string, std::string> &getHeaders();
@@ -47,6 +48,7 @@ private:
 	size_t bodyExpected;
 	size_t bodyReceived;
 	size_t mHeaderEnd;
+	int mClientNum;
 };
 
 // References:
