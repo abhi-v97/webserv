@@ -284,6 +284,8 @@ void WebServer::acceptConnection(int listenFd)
 
 void WebServer::closeConnection(int clientNum)
 {
+	mLog->log(NOTICE, std::string("closing connection ") +
+	                      numToString(mPollFdVector[clientNum].fd));
 	close(mPollFdVector[clientNum].fd);
 	mClients.erase(mPollFdVector[clientNum].fd);
 	mPollFdVector.erase(mPollFdVector.begin() + clientNum);
@@ -345,6 +347,7 @@ void WebServer::parseRequest(int clientNum)
 		}
 
 		// TODO: check for and fix repeated header parsing
+		// TODO: check if client.request has any leftover data
 		requestObj.parse(client.request);
 		requestObj.setHeaderEnd(headerEnd);
 		if (requestObj.getMethod() != POST ||

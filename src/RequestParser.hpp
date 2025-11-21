@@ -50,6 +50,7 @@ private:
 	size_t bodyReceived;
 	size_t mHeaderEnd;
 	int mClientNum;
+	int mStatusCode;
 };
 
 // References:

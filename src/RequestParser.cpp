@@ -11,7 +11,7 @@
 
 RequestParser::RequestParser()
 	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1),
-	  bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mClientNum()
+	  bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mClientNum(), mStatusCode(200)
 {
 }
 
@@ -118,6 +118,7 @@ int RequestParser::keepAlive()
 	{
 		if (mHeaderField["connection"] == "keep-alive")
 		{
+			mHeaderField.erase("connection");
 			return 1;
 		}
 	}
@@ -141,9 +142,17 @@ void RequestParser::parse(const std::string &requestBuffer)
 
 	// parse the header line on its own
 	std::getline(inf, buffer);
+
+	// skip leading blank lines in request
+	while (buffer == "\r")
+	{
+		std::getline(inf, buffer);
+	}
 	if (buffer.empty())
 	{
-		throw(std::runtime_error("Error: requestParser: file not found"));
+		mStatusCode = 400;
+		return;
+		// return error code 400: bad request
 	}
 	parseHeader(buffer);
 
