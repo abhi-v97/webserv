@@ -23,7 +23,8 @@ public:
 	RequestMethod getMethod();
 	std::string &getUri();
 	size_t getContentLength();
-	bool getParsingFinished();
+	bool getParsingFinished() const;
+	int keepAlive();
 
 	void setHeaderEnd(const size_t &headerEnd);
 	void setParsingFinished(const bool &status);

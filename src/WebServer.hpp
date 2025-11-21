@@ -76,6 +76,8 @@ public:
 	bool sendResponse(int clientNum);
 	void generateResponse(int clientNum);
 
+	void closeConnection(int clientNum);
+
 private:
 	std::string mIpAddress; /**< Server IP Address, stored as std::string*/
 	// int mPort;              /**< Server listening port */

@@ -94,7 +94,7 @@ std::map<std::string, std::string> &RequestParser::getHeaders()
 	return this->mHeaderField;
 }
 
-bool RequestParser::getParsingFinished()
+bool RequestParser::getParsingFinished() const
 {
 	return this->parsingFinished;
 }
@@ -108,6 +108,20 @@ void RequestParser::parseHeader(const std::string &header)
 	setMethod(methodStr);
 	headerStream >> mRequestUri;
 	headerStream >> mHttpVersion;
+}
+
+// TODO: optional: http1.1 also supports a keep-alive header field, where client
+// can specify how many further requests to accept before closing
+int RequestParser::keepAlive()
+{
+	if (mHeaderField.find("connection") != mHeaderField.end())
+	{
+		if (mHeaderField["connection"] == "keep-alive")
+		{
+			return 1;
+		}
+	}
+	return 0;
 }
 
 void RequestParser::setHeaderEnd(const size_t &headerEnd)
@@ -239,7 +253,8 @@ bool RequestParser::parseBody(std::string &request)
 	if (bodyToFile)
 	{
 		ssize_t bytesWritten =
-			write(bodyFd, request.data() + mHeaderEnd + 4 + bodyReceived, bodyBufferSize);
+			write(bodyFd, request.data() + mHeaderEnd + 4 + bodyReceived,
+		          bodyBufferSize);
 		if (bytesWritten > 0)
 		{
 			bodyReceived += bytesWritten;

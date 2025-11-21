@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <sys/poll.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 #include "CgiHandler.hpp"
 #include "Logger.hpp"
@@ -206,6 +207,8 @@ void WebServer::startListen()
 			if (mPollFdVector[i].revents & POLLOUT)
 			{
 				// if we have enough data, send reponse to client
+				// TODO: check here if another request is queued up
+				// if another request exists, do not reset POLLOUT flag
 				if (sendResponse(i))
 				{
 					// if all data has been sent, remove POLLOUT flag
@@ -272,6 +275,13 @@ void WebServer::acceptConnection(int listenFd)
 	mClients[newSocket] = state;
 }
 
+void WebServer::closeConnection(int clientNum)
+{
+	close(mPollFdVector[clientNum].fd);
+	mClients.erase(mPollFdVector[clientNum].fd);
+	mPollFdVector.erase(mPollFdVector.begin() + clientNum);
+}
+
 /**
     \brief Receives the client request and sends back a generic response, for
    now
@@ -292,6 +302,7 @@ void WebServer::parseRequest(int clientNum)
 		mLog->log(WARNING, "failed to read client request");
 		return;
 	}
+
 	if (bufferRead == 0)
 	{
 		// request of zero bytes received, shut down the connection
@@ -302,9 +313,7 @@ void WebServer::parseRequest(int clientNum)
 			INFO,
 			std::string("recv(): zero bytes received, closing connection ") +
 				numToString(mPollFdVector[clientNum].fd));
-		close(mPollFdVector[clientNum].fd);
-		mClients.erase(mPollFdVector[clientNum].fd);
-		mPollFdVector.erase(mPollFdVector.begin() + clientNum);
+		closeConnection(clientNum);
 		return;
 	}
 
@@ -327,6 +336,7 @@ void WebServer::parseRequest(int clientNum)
 		{
 			return;
 		}
+
 		// TODO: check for and fix repeated header parsing
 		requestObj.parse(client.request);
 		requestObj.setHeaderEnd(headerEnd);
@@ -338,8 +348,12 @@ void WebServer::parseRequest(int clientNum)
 			client.request.erase(0, headerEnd + 4); // remove header plus CRLF
 			client.bytesSent = 0;
 
-			// continue to see if another request is ready
-			continue;
+			// if client requests to keep connection alive
+			if (requestObj.keepAlive())
+			{
+				continue;
+			}
+			closeConnection(clientNum);
 		}
 		break;
 	}
