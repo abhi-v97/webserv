@@ -215,6 +215,13 @@ void WebServer::startListen()
 					mPollFdVector[i].events &= ~POLLOUT;
 					mClients[mPollFdVector[i].fd].parser.setParsingFinished(
 						false);
+
+					// if client requests to keep connection alive
+					if (mClients[mPollFdVector[i].fd].parser.keepAlive())
+					{
+						continue;
+					}
+					closeConnection(i);
 				}
 			}
 		}
@@ -348,12 +355,7 @@ void WebServer::parseRequest(int clientNum)
 			client.request.erase(0, headerEnd + 4); // remove header plus CRLF
 			client.bytesSent = 0;
 
-			// if client requests to keep connection alive
-			if (requestObj.keepAlive())
-			{
-				continue;
-			}
-			closeConnection(clientNum);
+			continue;
 		}
 		break;
 	}
