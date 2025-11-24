@@ -5,12 +5,12 @@ AllowShortBlocksOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 AllowShortNamespacesOnASingleLine: false
-BinPackArguments: true
-BinPackParameters: true
+BinPackArguments: false
+BinPackParameters: false
 BreakBeforeBraces: Allman
-BreakBeforeTernaryOperators: true
+BreakBeforeTernaryOperators: false
 BreakStringLiterals: true
-ColumnLimit: 80
+ColumnLimit: 100
 CompactNamespaces: false
 ContinuationIndentWidth: 4
 FixNamespaceComments: false
@@ -22,28 +22,25 @@ IncludeCategories:
   Priority:        -20
 - Regex:           '".+"'
   Priority:        -10
-IndentPPDirectives: AfterHash
 IndentWidth: 4
-InsertBraces: true
 InsertNewlineAtEOF: true
 KeepEmptyLines:
-  AtEndOfFile: false
-  AtStartOfBlock: false
-  AtStartOfFile: false
+  AtEndOfFile: true
+  AtStartOfBlock: true
+  AtStartOfFile: true
 LineEnding: LF
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: All
-PPIndentWidth: 1
 PointerAlignment: Right
 QualifierAlignment: Left
 ReferenceAlignment: Right
 ReflowComments: Always
 RemoveEmptyLinesInUnwrappedLines: true
-RemoveParentheses: ReturnStatement
+# RemoveParentheses: ReturnStatement
 RemoveSemicolon: true
 SeparateDefinitionBlocks: Always
 SortIncludes: CaseSensitive
-SpaceAfterCStyleCast: false
+SpaceAfterCStyleCast: true
 SpaceAfterLogicalNot: false
 SpaceAfterTemplateKeyword: false
 SpaceBeforeAssignmentOperators: true
@@ -54,12 +51,12 @@ SpaceBeforeJsonColon: false
 SpaceBeforeParens: ControlStatementsExceptControlMacros
 SpaceBeforeRangeBasedForLoopColon: false
 SpaceBeforeSquareBrackets: false
-SpaceInEmptyBlock: false
 SpacesBeforeTrailingComments: 1
-SpacesInAngles: Never
+SpacesInAngles: Leave
 SpacesInLineCommentPrefix:
   Minimum: 1
 SpacesInParens: Never
 SpacesInSquareBrackets: false
 TabWidth: 4
-UseTab: AlignWithSpaces
+UseTab: Always
+AlignConsecutiveDeclarations: Consecutive
