@@ -10,14 +10,14 @@
 #include "WebServer.hpp" // TODO: included for the global vars, probably unneccessary so remove later
 
 RequestParser::RequestParser()
-	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1),
-	  bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mClientNum(), mStatusCode(200)
+	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1), bodyExpected(0),
+	  bodyReceived(0), mHeaderEnd(0), mClientNum(), mStatusCode(200)
 {
 }
 
 RequestParser::RequestParser(int clientNum)
-	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1),
-	  bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mClientNum(clientNum)
+	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1), bodyExpected(0),
+	  mStatusCode(200)
 {
 }
 
@@ -102,7 +102,7 @@ bool RequestParser::getParsingFinished() const
 void RequestParser::parseHeader(const std::string &header)
 {
 	std::istringstream headerStream(header);
-	std::string methodStr;
+	std::string		   methodStr;
 
 	headerStream >> methodStr;
 	setMethod(methodStr);
@@ -138,22 +138,10 @@ void RequestParser::setParsingFinished(const bool &status)
 void RequestParser::parse(const std::string &requestBuffer)
 {
 	std::stringstream inf(requestBuffer);
-	std::string buffer;
+	std::string		  buffer;
 
 	// parse the header line on its own
 	std::getline(inf, buffer);
-
-	// skip leading blank lines in request
-	while (buffer == "\r")
-	{
-		std::getline(inf, buffer);
-	}
-	if (buffer.empty())
-	{
-		mStatusCode = 400;
-		return;
-		// return error code 400: bad request
-	}
 	parseHeader(buffer);
 
 	// now parse the header fields
@@ -167,33 +155,30 @@ void RequestParser::parse(const std::string &requestBuffer)
 		size_t colonPos = buffer.find(':');
 		if (colonPos == std::string::npos)
 		{
-			throw std::runtime_error(
-				"Header line is missing a colon separator.");
+			throw std::runtime_error("Header line is missing a colon separator.");
 		}
 
 		std::string rawFieldName = buffer.substr(0, colonPos);
-		size_t firstChar = rawFieldName.find_first_not_of(" \t");
-		size_t lastChar = rawFieldName.find_last_not_of(" \t");
+		size_t		firstChar = rawFieldName.find_first_not_of(" \t");
+		size_t		lastChar = rawFieldName.find_last_not_of(" \t");
 		if (firstChar == std::string::npos)
 		{
 			throw std::runtime_error("Field name is empty or only whitespace.");
 		}
 
-		std::string fieldName =
-			rawFieldName.substr(firstChar, lastChar - firstChar + 1);
+		std::string fieldName = rawFieldName.substr(firstChar, lastChar - firstChar + 1);
 		if (fieldName.find_first_of(" \t") != std::string::npos)
 		{
 			throw std::runtime_error("Field name contains whitespace");
 		}
 		for (int i = 0; i < fieldName.size(); i++)
 		{
-			fieldName[i] =
-				std::tolower(static_cast<unsigned char>(fieldName[i]));
+			fieldName[i] = std::tolower(static_cast<unsigned char>(fieldName[i]));
 		}
 		// std::cout << "Field name: " << fieldName << "." << std::endl;
 
-		size_t fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
-		size_t fieldValueEnd = buffer.find_last_not_of("\r\n");
+		size_t		fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
+		size_t		fieldValueEnd = buffer.find_last_not_of("\r\n");
 		std::string fieldValue;
 		if (fieldValueStart == std::string::npos)
 		{
@@ -201,8 +186,7 @@ void RequestParser::parse(const std::string &requestBuffer)
 		}
 		else
 		{
-			fieldValue = buffer.substr(fieldValueStart,
-			                           fieldValueEnd - fieldValueStart + 1);
+			fieldValue = buffer.substr(fieldValueStart, fieldValueEnd - fieldValueStart + 1);
 		}
 		mHeaderField[fieldName] = fieldValue;
 		// std::cout << fieldName << " = " << fieldValue << "." << std::endl;
@@ -262,8 +246,7 @@ bool RequestParser::parseBody(std::string &request)
 	if (bodyToFile)
 	{
 		ssize_t bytesWritten =
-			write(bodyFd, request.data() + mHeaderEnd + 4 + bodyReceived,
-		          bodyBufferSize);
+			write(bodyFd, request.data() + mHeaderEnd + 4 + bodyReceived, bodyBufferSize);
 		if (bytesWritten > 0)
 		{
 			bodyReceived += bytesWritten;

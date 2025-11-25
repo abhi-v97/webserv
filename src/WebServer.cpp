@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -22,7 +23,7 @@
 #define LISTEN_REQUESTS 8
 
 /** \var gSignal
-    Global variable used to store signal information
+	Global variable used to store signal information
 */
 int gSignal = 0;
 
@@ -30,17 +31,14 @@ int gSignal = 0;
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-WebServer::WebServer(std::string ipAddress,
-                     const std::vector<ServerConfig> &srv)
+WebServer::WebServer(std::string ipAddress, const std::vector<ServerConfig> &srv)
 	: mIpAddress(ipAddress), mLog(Logger::getInstance())
 
 {
-	for (std::vector<ServerConfig>::const_iterator it = srv.begin();
-	     it != srv.end(); it++)
+	for (std::vector<ServerConfig>::const_iterator it = srv.begin(); it != srv.end(); it++)
 	{
 		std::vector<int> ports = (*it).listenPorts;
-		for (std::vector<int>::const_iterator it = ports.begin();
-		     it != ports.end(); it++)
+		for (std::vector<int>::const_iterator it = ports.begin(); it != ports.end(); it++)
 		{
 			sockaddr_in socketAddress = sockaddr_in();
 			socketAddress.sin_family = AF_INET;
@@ -106,12 +104,12 @@ WebServer::~WebServer()
 */
 
 /**
-    \brief Server socket and port setup
+	\brief Server socket and port setup
 
-    creates the listening socket, sets it to nonblocking, and binds the socket
-    to the server port
+	creates the listening socket, sets it to nonblocking, and binds the socket
+	to the server port
 
-    \param socketStruct sockaddr_in struct that contains listening port info
+	\param socketStruct sockaddr_in struct that contains listening port info
 */
 int WebServer::bindPort(sockaddr_in socketStruct)
 {
@@ -119,12 +117,12 @@ int WebServer::bindPort(sockaddr_in socketStruct)
 	int mSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (mSocket < 0)
 	{
-		mLog->log(ERROR,
-		          std::string("socket() failed: ") + std::strerror(errno));
+		mLog->log(ERROR, std::string("socket() failed: ") + std::strerror(errno));
 		return 1;
 	}
-	mLog->log(NOTICE, std::string("Socket created with value: ") +
-	                      numToString(ntohs(socketStruct.sin_port)));
+	mLog->log(NOTICE,
+			  std::string("Socket created with value: ") +
+				  numToString(ntohs(socketStruct.sin_port)));
 
 	// OS doesn't immediately free the port, which causes web server to hang
 	// if you close and reopen it quickly. This tells our server that we can
@@ -132,8 +130,7 @@ int WebServer::bindPort(sockaddr_in socketStruct)
 	int enable = 1;
 	if (setsockopt(mSocket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
 	{
-		mLog->log(ERROR, std::string("setsockopt(SO_REUSEADDR) failed: ") +
-		                     std::strerror(errno));
+		mLog->log(ERROR, std::string("setsockopt(SO_REUSEADDR) failed: ") + std::strerror(errno));
 		return 1;
 	}
 
@@ -141,14 +138,14 @@ int WebServer::bindPort(sockaddr_in socketStruct)
 	setNonBlockingFlag(mSocket);
 
 	// bind socket and server port
-	if (bind(mSocket, (sockaddr *)&socketStruct, sizeof(socketStruct)) < 0)
+	if (bind(mSocket, (sockaddr *) &socketStruct, sizeof(socketStruct)) < 0)
 	{
 		mLog->log(ERROR, std::string("bind() failed: ") + std::strerror(errno));
 		return 1;
 	}
-	mLog->log(NOTICE, std::string("bind success: ") + numToString(mIpAddress) +
-	                      std::string(":") +
-	                      numToString(socketStruct.sin_port));
+	mLog->log(NOTICE,
+			  std::string("bind success: ") + numToString(mIpAddress) + std::string(":") +
+				  numToString(socketStruct.sin_port));
 	mSocketVector.push_back(mSocket);
 	return 0;
 }
@@ -158,12 +155,12 @@ int WebServer::bindPort(sockaddr_in socketStruct)
 // a request. Then it grabs the request (no parsing yet) and sends some data
 // back (test.html for now). Then it shuts down.
 /**
-    \brief Server starts listening for incoming connections
+	\brief Server starts listening for incoming connections
 
-    Kickstarts the server loop, listening for incoming connections and handles
-    them in a rudimentary manner
+	Kickstarts the server loop, listening for incoming connections and handles
+	them in a rudimentary manner
 
-    Server keeps listening until SIGINT is received
+	Server keeps listening until SIGINT is received
 */
 void WebServer::startListen()
 {
@@ -172,8 +169,7 @@ void WebServer::startListen()
 	{
 		if (listen(mSocketVector.at(i), LISTEN_REQUESTS) < 0)
 		{
-			mLog->log(ERROR,
-			          std::string("listen() failed: ") + std::strerror(errno));
+			mLog->log(ERROR, std::string("listen() failed: ") + std::strerror(errno));
 			return;
 		}
 		struct pollfd listenStruct = {mSocketVector.at(i), POLLIN, 0};
@@ -185,12 +181,10 @@ void WebServer::startListen()
 
 	while (gSignal == 0)
 	{
-		int pollNum = poll(mPollFdVector.data(),
-		                   static_cast<int>(mPollFdVector.size()), 1);
+		int pollNum = poll(mPollFdVector.data(), static_cast<int>(mPollFdVector.size()), 1);
 		if (pollNum < 0)
 		{
-			mLog->log(ERROR,
-			          std::string("poll() failed: ") + std::strerror(errno));
+			mLog->log(ERROR, std::string("poll() failed: ") + std::strerror(errno));
 		}
 		for (int i = static_cast<int>(mPollFdVector.size()) - 1; i >= 0; i--)
 		{
@@ -213,8 +207,7 @@ void WebServer::startListen()
 				{
 					// if all data has been sent, remove POLLOUT flag
 					mPollFdVector[i].events &= ~POLLOUT;
-					mClients[mPollFdVector[i].fd].parser.setParsingFinished(
-						false);
+					mClients[mPollFdVector[i].fd].parser.setParsingFinished(false);
 
 					// if client requests to keep connection alive
 					if (mClients[mPollFdVector[i].fd].parser.keepAlive())
@@ -229,27 +222,25 @@ void WebServer::startListen()
 }
 
 /**
-    \brief Handles accepting new clients
+	\brief Handles accepting new clients
 
-    Accepts the client connection, then stores client info and updates the
-    mClients container with new client
+	Accepts the client connection, then stores client info and updates the
+	mClients container with new client
 
-    \param socket The listening socket that client used to contact the server
+	\param socket The listening socket that client used to contact the server
 */
 void WebServer::acceptConnection(int listenFd)
 {
-	int newSocket = 0;
+	int				   newSocket = 0;
 	struct sockaddr_in clientAddr = {};
-	socklen_t clientLen = sizeof(clientAddr);
+	socklen_t		   clientLen = sizeof(clientAddr);
 
-	newSocket = accept(listenFd, (sockaddr *)&clientAddr, &clientLen);
+	newSocket = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
 	if (newSocket < 0)
 	{
-		mLog->log(ERROR,
-		          std::string("accept() failed: ") + std::strerror(errno));
+		mLog->log(ERROR, std::string("accept() failed: ") + std::strerror(errno));
 	}
-	mLog->log(NOTICE, std::string("accepted client with fd: ") +
-	                      numToString(newSocket));
+	mLog->log(NOTICE, std::string("accepted client with fd: ") + numToString(newSocket));
 
 	// set acceptd client socket to be non-blocking
 	if (!setNonBlockingFlag(newSocket))
@@ -262,8 +253,7 @@ void WebServer::acceptConnection(int listenFd)
 	clientIp << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
 			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
 			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24)
-			 << std::endl;
+			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24) << std::endl;
 
 	// update the pollfd struct
 	struct pollfd newClient = {newSocket, POLLIN, 0};
@@ -284,25 +274,47 @@ void WebServer::acceptConnection(int listenFd)
 
 void WebServer::closeConnection(int clientNum)
 {
-	mLog->log(NOTICE, std::string("closing connection ") +
-	                      numToString(mPollFdVector[clientNum].fd));
+	mLog->log(NOTICE,
+			  std::string("closing connection ") + numToString(mPollFdVector[clientNum].fd));
 	close(mPollFdVector[clientNum].fd);
 	mClients.erase(mPollFdVector[clientNum].fd);
 	mPollFdVector.erase(mPollFdVector.begin() + clientNum);
 }
 
 /**
-    \brief Receives the client request and sends back a generic response, for
+ * \brief Helper function which skips empty lines in buffer and appends the rest into request string
+ * for parsing
+ *
+ * \param request std::string request that is used later for request parsing
+ * \param buffer buffer which holds data read from socket FD using recv
+ * \param bytesRead amount of bytes read by recv
+ */
+void appendClientRequest(std::string &request, const char buffer[4096], int bytesRead)
+{
+	int			blankChars = 0;
+	std::string blank("\r\n");
+
+	while (buffer[blankChars])
+	{
+		if (blank.find_first_of(buffer[blankChars]) == std::string::npos)
+			break;
+		blankChars++;
+	}
+	request.append(buffer + blankChars, bytesRead - blankChars);
+}
+
+/**
+	\brief Receives the client request and sends back a generic response, for
    now
 */
 void WebServer::parseRequest(int clientNum)
 {
 	ClientState &client = mClients[mPollFdVector[clientNum].fd];
+	char		buffer[4096];
+	ssize_t		bytesRead;
 
-	char buffer[4096] = {0};
-	ssize_t bufferRead;
-	bufferRead = recv(mPollFdVector[clientNum].fd, buffer, 4096, 0);
-	if (bufferRead < 0)
+	bytesRead = recv(mPollFdVector[clientNum].fd, buffer, 4096, 0);
+	if (bytesRead < 0)
 	{
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 		{
@@ -311,34 +323,28 @@ void WebServer::parseRequest(int clientNum)
 		mLog->log(WARNING, "failed to read client request");
 		return;
 	}
-
-	if (bufferRead == 0)
+	else if (bytesRead == 0)
 	{
 		// request of zero bytes received, shut down the connection
 		// TODO: other conditions and revents can also require us to close the
 		// connection; turn this into a function, find all other applicable
 		// revents
-		mLog->log(
-			INFO,
-			std::string("recv(): zero bytes received, closing connection ") +
-				numToString(mPollFdVector[clientNum].fd));
+		mLog->log(INFO,
+				  std::string("recv(): zero bytes received, closing connection ") +
+					  numToString(mPollFdVector[clientNum].fd));
 		closeConnection(clientNum);
 		return;
 	}
 
-	client.request.append(buffer, bufferRead);
+	// skips empty lines and appends rest into client.request
+	appendClientRequest(client.request, buffer, bytesRead);
+	if (client.request.empty())
+		return;
 
 	// while loop for future addition of mutliple request handling
 	while (42)
 	{
 		size_t headerEnd = client.request.find("\r\n\r\n");
-
-		// incomplete header, wait for more data
-		if (headerEnd == std::string::npos)
-		{
-			return;
-		}
-
 		RequestParser &requestObj = client.parser;
 
 		if (client.parser.getParsingFinished())
@@ -350,8 +356,7 @@ void WebServer::parseRequest(int clientNum)
 		// TODO: check if client.request has any leftover data
 		requestObj.parse(client.request);
 		requestObj.setHeaderEnd(headerEnd);
-		if (requestObj.getMethod() != POST ||
-		    requestObj.parseBody(client.request))
+		if (requestObj.getMethod() != POST || requestObj.parseBody(client.request))
 		{
 			generateResponse(clientNum);
 			requestObj.setParsingFinished(true);
@@ -365,36 +370,36 @@ void WebServer::parseRequest(int clientNum)
 }
 
 /**
-    Placeholder function, generates a blank page to send to client.
+	Placeholder function, generates a blank page to send to client.
 */
 std::string WebServer::defaultResponse()
 {
-	std::ifstream htmlFile("test.html");
+	std::ifstream	   htmlFile("test.html");
 	std::ostringstream body;
 	std::ostringstream response;
 
 	body << htmlFile.rdbuf();
-	response << "HTTP/1.1 201 OK\nContent-Type: text/html\nContent-Length: "
-			 << body.str().size() << "\n\n"
+	response << "HTTP/1.1 201 OK\nContent-Type: text/html\nContent-Length: " << body.str().size()
+			 << "\n\n"
 			 << body.str();
 	return response.str();
 }
 
 /**
-    \brief Placeholder function, generates a dummy message as a response
-    regardless of what the client requests
+	\brief Placeholder function, generates a dummy message as a response
+	regardless of what the client requests
 
-    \param clientNum client socket FD to send the response to
+	\param clientNum client socket FD to send the response to
 */
 void WebServer::generateResponse(int clientNum)
 {
 	ClientState &client = mClients[mPollFdVector[clientNum].fd];
-	ssize_t bytes = 0;
-	int isCGI = 0;
+	ssize_t		 bytes = 0;
+	int			 isCGI = 0;
 	if (isCGI)
 	{
 		ResponseBuilder dummyObj = ResponseBuilder();
-		CgiHandler &cgiObj = client.cgiObj;
+		CgiHandler	   &cgiObj = client.cgiObj;
 
 		// TODO: change this to accept other CGI requests
 		cgiObj.execute("hello.py");
@@ -415,19 +420,21 @@ void WebServer::generateResponse(int clientNum)
 }
 
 /**
-    Attempts to send response data to client
+	Attempts to send response data to client
 
-    \param clientFd socket FD of the client is receiving the response
+	\param clientFd socket FD of the client is receiving the response
 */
 bool WebServer::sendResponse(int clientNum)
 {
 	ClientState &client = mClients[mPollFdVector[clientNum].fd];
-	ssize_t bytes = 0;
+	ssize_t		 bytes = 0;
 
 	while (client.bytesSent < client.response.size())
 	{
-		bytes = send(client.fd, client.response.c_str() + client.bytesSent,
-		             client.response.size() - client.bytesSent, MSG_NOSIGNAL);
+		bytes = send(client.fd,
+					 client.response.c_str() + client.bytesSent,
+					 client.response.size() - client.bytesSent,
+					 MSG_NOSIGNAL);
 		if (bytes < 0)
 		{
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -452,9 +459,9 @@ bool WebServer::sendResponse(int clientNum)
 /* ************************************************************************** */
 
 /**
-    Helper function which adds the non-blocking flag to the listen socket.
+	Helper function which adds the non-blocking flag to the listen socket.
 
-    \param socketFd
+	\param socketFd
 */
 bool setNonBlockingFlag(int socketFd)
 {
@@ -474,10 +481,10 @@ bool setNonBlockingFlag(int socketFd)
 }
 
 /**
-    Helper function which changes the global signal variable when a signal is
-    received
+	Helper function which changes the global signal variable when a signal is
+	received
 
-    \param sig signal value
+	\param sig signal value
 */
 void signalHandler(int sig)
 {

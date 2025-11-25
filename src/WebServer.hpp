@@ -98,6 +98,7 @@ private:
 
 bool setNonBlockingFlag(int socketFd);
 void signalHandler(int sig);
+void appendClientRequest(std::string &request, const char buffer[4096], int bytesRead);
 
 #endif /* ******************************************************* WEBSERVER_H  \
         */
