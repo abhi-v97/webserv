@@ -282,28 +282,6 @@ void WebServer::closeConnection(int clientNum)
 }
 
 /**
- * \brief Helper function which skips empty lines in buffer and appends the rest into request string
- * for parsing
- *
- * \param request std::string request that is used later for request parsing
- * \param buffer buffer which holds data read from socket FD using recv
- * \param bytesRead amount of bytes read by recv
- */
-void appendClientRequest(std::string &request, const char buffer[4096], int bytesRead)
-{
-	int			blankChars = 0;
-	std::string blank("\r\n");
-
-	while (buffer[blankChars])
-	{
-		if (blank.find_first_of(buffer[blankChars]) == std::string::npos)
-			break;
-		blankChars++;
-	}
-	request.append(buffer + blankChars, bytesRead - blankChars);
-}
-
-/**
 	\brief Receives the client request and sends back a generic response, for
    now
 */
@@ -489,4 +467,26 @@ bool setNonBlockingFlag(int socketFd)
 void signalHandler(int sig)
 {
 	gSignal = sig;
+}
+
+/**
+ * \brief Helper function which skips empty lines in buffer and appends the rest into request string
+ * for parsing
+ *
+ * \param request std::string request that is used later for request parsing
+ * \param buffer buffer which holds data read from socket FD using recv
+ * \param bytesRead amount of bytes read by recv
+ */
+void appendClientRequest(std::string &request, const char buffer[4096], int bytesRead)
+{
+	int			blankChars = 0;
+	std::string blank("\r\n");
+
+	while (buffer[blankChars])
+	{
+		if (blank.find_first_of(buffer[blankChars]) == std::string::npos)
+			break;
+		blankChars++;
+	}
+	request.append(buffer + blankChars, bytesRead - blankChars);
 }
