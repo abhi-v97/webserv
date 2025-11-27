@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h> // used for fcntl(), believe it or not
-#include <fstream>
 #include <iostream>
 #include <netinet/in.h>
 #include <sstream>
@@ -70,7 +69,6 @@ WebServer::WebServer(std::string ipAddress, int port)
 	socketAddress.sin_addr.s_addr = inet_addr(mIpAddress.c_str());
 
 	// setup signal handling
-	// TODO: how should signals work with multiple servers?
 	std::signal(SIGINT, SIG_IGN);
 	std::signal(SIGINT, signalHandler);
 	if (bindPort(socketAddress) != 0)
@@ -86,7 +84,6 @@ WebServer::WebServer(std::string ipAddress, int port)
 
 WebServer::~WebServer()
 {
-	// TODO: segfaults, but probably not worth worrying about
 	mLog->log(NOTICE, "destructor called, web server shutting down");
 	std::signal(SIGINT, SIG_DFL);
 	for (size_t i = 0; i < mSocketVector.size(); i++)
@@ -269,6 +266,7 @@ void WebServer::acceptConnection(int listenFd)
 	state.fd = newSocket;
 	state.clientIp = clientIp.str();
 	state.parser = RequestParser();
+	state.cgiObj = CgiHandler();
 	state.responseReady = false;
 	state.keepAlive = false;
 	mClients[newSocket] = state;
@@ -295,9 +293,7 @@ void WebServer::readFromSocket(int clientNum)
 
 	// don't read next data until you are finished with all requests from the previous read
 	if (client.parser.getParsingFinished())
-	{
 		return;
-	}
 
 	bytesRead = recv(mPollFdVector[clientNum].fd, buffer, 4096, 0);
 	if (bytesRead < 0)
@@ -327,34 +323,37 @@ void WebServer::parseRequest(int clientNum)
 
 	if (requestObj.parse(client.request) == false)
 	{
-		mLog->log(ERROR, std::string("invalid request, closing connection ") +
-					  numToString(client.fd));
+		mLog->log(ERROR,
+				  std::string("invalid request, closing connection ") + numToString(client.fd));
 		closeConnection(clientNum);
 		return;
 	}
 
 	if (requestObj.getParsingFinished() == true)
-	{
-		// generateResponse(clientNum);
-		// client.bytesSent = 0;
 		mPollFdVector[clientNum].events |= POLLOUT;
-	}
 }
 
-/**
-	Placeholder function, generates a blank page to send to client.
-*/
-std::string WebServer::defaultResponse()
+bool WebServer::checkCgi(int clientNum)
 {
-	std::ifstream	   htmlFile("test.html");
-	std::ostringstream body;
-	std::ostringstream response;
+	ClientState &client = mClients[mPollFdVector[clientNum].fd];
+	std::string	 uri = client.parser.getUri();
+	size_t		 extStart = uri.rfind('.');
 
-	body << htmlFile.rdbuf();
-	response << "HTTP/1.1 201 OK\nContent-Type: text/html\nContent-Length: " << body.str().size()
-			 << "\n\n"
-			 << body.str();
-	return response.str();
+	if (extStart == std::string::npos)
+		return (false);
+	std::string extStr = uri.substr(extStart);
+	if (extStr == ".py")
+	{
+		client.cgiObj.setCgiType(PYTHON);
+		return (true);
+	}
+	else if (extStr == ".sh")
+	{
+		client.cgiObj.setCgiType(SHELL);
+		return (true);
+	}
+
+	return (false);
 }
 
 /**
@@ -392,8 +391,7 @@ bool WebServer::generateResponse(int clientNum)
 	}
 	else
 	{
-		client.response = defaultResponse();
-		// mPollFdVector[clientNum].events |= POLLOUT;
+		client.response = client.responseObj.buildResponse();
 	}
 	client.keepAlive = client.parser.keepAlive();
 	client.parser.reset();
@@ -419,9 +417,7 @@ bool WebServer::sendResponse(int clientNum)
 					 client.response.size() - client.bytesSent,
 					 MSG_NOSIGNAL);
 		if (bytes < 0)
-		{
 			return (false);
-		}
 		client.bytesSent += bytes;
 	}
 	// return true if done, false if not yet finished

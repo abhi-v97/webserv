@@ -50,7 +50,7 @@ struct ClientState
 	ResponseBuilder responseObj;   /**< Response builder object */
 	CgiHandler		cgiObj;		   /**< CGI handler object */
 	bool			responseReady; /**< set to true if a response is ready to send */
-	bool keepAlive;
+	bool			keepAlive;
 };
 
 /** \class WebServer
@@ -80,19 +80,16 @@ public:
 	void closeConnection(int clientNum);
 
 private:
-	std::string mIpAddress; /**< Server IP Address, stored as std::string*/
-	// int mPort;              /**< Server listening port */
-	// int mListenSocket; /**< Server socket for incoming requests */
-	// TODO: do you need to create and store a struct for listening sockets?
-	// Atm they are not being used outside of bindPort()
+	std::string				 mIpAddress; /**< Server IP Address, stored as std::string*/
 	std::vector<int>		 mSocketVector;
 	std::vector<sockaddr_in> mSocketAddressStruct; /**< Vector of sockaddr_in structs used to bind
 													 server port and listening socket */
-	// struct sockaddr_in mSocketAddress; /**< struct needed by bind() */
-	std::map<int, ClientState> mClients;	  /**< map container to hold client info */
-	std::vector<pollfd>		   mPollFdVector; /**< vector container to hold socket
-												info for each connection*/
+	std::map<int, ClientState> mClients;		   /**< map container to hold client info */
+	std::vector<pollfd>		   mPollFdVector;	   /**< vector container to hold socket
+													  info for each connection*/
 	Logger *mLog;
+
+	bool checkCgi(int clientNum);
 };
 
 bool setNonBlockingFlag(int socketFd);

@@ -14,8 +14,7 @@ CgiHandler::CgiHandler(): m_PID(0), m_fd()
 {
 }
 
-CgiHandler::CgiHandler(const CgiHandler &src)
-	: m_header(src.m_header), m_PID(0), m_fd()
+CgiHandler::CgiHandler(const CgiHandler &src): m_header(src.m_header), m_PID(0), m_fd()
 {
 }
 
@@ -29,26 +28,6 @@ CgiHandler::~CgiHandler()
 }
 
 /*
-** --------------------------------- OVERLOAD ---------------------------------
-*/
-
-CgiHandler &CgiHandler::operator=(const CgiHandler &rhs)
-{
-	if (this != &rhs)
-	{
-		this->m_header = rhs.m_header;
-		this->m_PID = rhs.m_PID;
-	}
-	return *this;
-}
-
-std::ostream &operator<<(std::ostream &outf, const CgiHandler &obj)
-{
-	// o << "Value = " << i.getValue();
-	return outf;
-}
-
-/*
 ** --------------------------------- METHODS ----------------------------------
 */
 
@@ -59,7 +38,6 @@ std::ostream &operator<<(std::ostream &outf, const CgiHandler &obj)
 void CgiHandler::execute(std::string cgiName)
 {
 	std::string cgiFile = ("cgi-bin/" + cgiName);
-	// char *cwd = getcwd(NULL, 0);
 
 	if (pipe(this->m_fd) < 0)
 	{
@@ -80,8 +58,8 @@ void CgiHandler::execute(std::string cgiName)
 		close(this->m_fd[1]);
 
 		char *argv[3];
-		argv[0] = (char *)"/usr/bin/python3";
-		argv[1] = (char *)cgiFile.c_str();
+		argv[0] = (char *) "/usr/bin/python3";
+		argv[1] = (char *) cgiFile.c_str();
 		argv[2] = NULL;
 		std::cerr << "starting execve" << std::endl;
 		execve(argv[0], argv, NULL);
@@ -100,8 +78,11 @@ void CgiHandler::execute(std::string cgiName)
 		std::signal(SIGINT, signalHandler);
 
 		close(this->m_fd[1]);
-		// close(this->m_fd[0]);
 	}
+}
+
+void CgiHandler::buildArgs()
+{
 }
 
 /*
@@ -111,6 +92,11 @@ void CgiHandler::execute(std::string cgiName)
 int CgiHandler::getOutFd()
 {
 	return this->m_fd[0];
+}
+
+void CgiHandler::setCgiType(CgiType type)
+{
+	this->mType = type;
 }
 
 /* ************************************************************************** */

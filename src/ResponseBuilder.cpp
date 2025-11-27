@@ -53,13 +53,13 @@ void ResponseBuilder::reset()
 // a stanard header line
 std::string ResponseBuilder::buildResponse()
 {
-	std::ifstream htmlFile("test.html");
+	std::ifstream	   htmlFile("test.html");
 	std::ostringstream response;
 	std::ostringstream body;
 
 	body << htmlFile.rdbuf();
-	response << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: "
-			 << body.str().size() << "\n\n"
+	response << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " << body.str().size()
+			 << "\n\n"
 			 << body.str();
 	return response.str();
 }
@@ -77,8 +77,8 @@ bool ResponseBuilder::readCgiResponse(int pipeOutFd)
 		body << buffer;
 		len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	}
-	mResponse << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: "
-			  << body.str().size() << "\n\n"
+	mResponse << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " << body.str().size()
+			  << "\n\n"
 			  << body.str();
 	std::cout << mResponse.str() << std::endl;
 
