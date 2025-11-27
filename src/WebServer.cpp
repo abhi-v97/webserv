@@ -196,26 +196,25 @@ void WebServer::startListen()
 			else if (mPollFdVector[i].revents & POLLIN)
 			{
 				// this means we're now dealing with a client
+				readFromSocket(i);
 				parseRequest(i);
 			}
-			if (mPollFdVector[i].revents & POLLOUT)
+			else if (mPollFdVector[i].revents & POLLOUT)
 			{
-				// if we have enough data, send reponse to client
-				// TODO: check here if another request is queued up
-				// if another request exists, do not reset POLLOUT flag
-				if (sendResponse(i))
+				if (generateResponse(i) == true)
 				{
-					// if all data has been sent, remove POLLOUT flag
-					mPollFdVector[i].events &= ~POLLOUT;
-					mClients[mPollFdVector[i].fd].parser.setParsingFinished(false);
-
-					// if client requests to keep connection alive
-					if (mClients[mPollFdVector[i].fd].parser.keepAlive())
-					{
-						continue;
-					}
-					closeConnection(i);
+					// if we have enough data, send reponse to client
+					if (sendResponse(i) == true)
+						parseRequest(i);
+					continue;
 				}
+				// if all data has been sent, remove POLLOUT flag
+				mPollFdVector[i].events &= ~POLLOUT;
+
+				// if client requests to keep connection alive
+				if (mClients[mPollFdVector[i].fd].parser.keepAlive())
+					continue;
+				closeConnection(i);
 			}
 		}
 	}
@@ -268,7 +267,8 @@ void WebServer::acceptConnection(int listenFd)
 	state.bytesSent = 0;
 	state.fd = newSocket;
 	state.clientIp = clientIp.str();
-	state.parser = RequestParser(state.fd);
+	state.parser = RequestParser();
+	state.responseReady = false;
 	mClients[newSocket] = state;
 }
 
@@ -282,68 +282,60 @@ void WebServer::closeConnection(int clientNum)
 }
 
 /**
-	\brief Receives the client request and sends back a generic response, for
-   now
+	\brief Reads socket using recv in 4kb chunks, then add it to std::string request in ClientState
+   for parsing.
 */
-void WebServer::parseRequest(int clientNum)
+void WebServer::readFromSocket(int clientNum)
 {
 	ClientState &client = mClients[mPollFdVector[clientNum].fd];
-	char		buffer[4096];
-	ssize_t		bytesRead;
+	char		 buffer[4096];
+	ssize_t		 bytesRead;
+
+	// don't read next data until you are finished with all requests from the previous read
+	if (client.parser.getParsingFinished())
+	{
+		return;
+	}
 
 	bytesRead = recv(mPollFdVector[clientNum].fd, buffer, 4096, 0);
 	if (bytesRead < 0)
 	{
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-		{
-			return;
-		}
-		mLog->log(WARNING, "failed to read client request");
+		mLog->log(WARNING, "recv() failed to read from socket");
 		return;
 	}
 	else if (bytesRead == 0)
 	{
-		// request of zero bytes received, shut down the connection
-		// TODO: other conditions and revents can also require us to close the
-		// connection; turn this into a function, find all other applicable
-		// revents
-		mLog->log(INFO,
+		mLog->log(NOTICE,
 				  std::string("recv(): zero bytes received, closing connection ") +
-					  numToString(mPollFdVector[clientNum].fd));
+					  numToString(client.fd));
 		closeConnection(clientNum);
 		return;
 	}
 
 	// skips empty lines and appends rest into client.request
-	appendClientRequest(client.request, buffer, bytesRead);
+	appendRequestFromBuffer(client.request, buffer, bytesRead);
+}
+
+void WebServer::parseRequest(int clientNum)
+{
+	ClientState &client = mClients[mPollFdVector[clientNum].fd];
+
 	if (client.request.empty())
 		return;
 
-	// while loop for future addition of mutliple request handling
-	while (42)
+	RequestParser &requestObj = client.parser;
+
+	if (requestObj.parse(client.request) == false)
 	{
-		size_t headerEnd = client.request.find("\r\n\r\n");
-		RequestParser &requestObj = client.parser;
+		closeConnection(clientNum);
+		return;
+	}
 
-		if (client.parser.getParsingFinished())
-		{
-			return;
-		}
-
-		// TODO: check for and fix repeated header parsing
-		// TODO: check if client.request has any leftover data
-		requestObj.parse(client.request);
-		requestObj.setHeaderEnd(headerEnd);
-		if (requestObj.getMethod() != POST || requestObj.parseBody(client.request))
-		{
-			generateResponse(clientNum);
-			requestObj.setParsingFinished(true);
-			client.request.erase(0, headerEnd + 4); // remove header plus CRLF
-			client.bytesSent = 0;
-
-			continue;
-		}
-		break;
+	if (requestObj.getParsingFinished() == true)
+	{
+		// generateResponse(clientNum);
+		// client.bytesSent = 0;
+		mPollFdVector[clientNum].events |= POLLOUT;
 	}
 }
 
@@ -369,11 +361,17 @@ std::string WebServer::defaultResponse()
 
 	\param clientNum client socket FD to send the response to
 */
-void WebServer::generateResponse(int clientNum)
+bool WebServer::generateResponse(int clientNum)
 {
 	ClientState &client = mClients[mPollFdVector[clientNum].fd];
 	ssize_t		 bytes = 0;
 	int			 isCGI = 0;
+
+	if (client.responseReady == true)
+		return (true);
+	if (client.parser.getParsingFinished() == false)
+		return (false);
+	client.responseReady = false;
 	if (isCGI)
 	{
 		ResponseBuilder dummyObj = ResponseBuilder();
@@ -393,8 +391,12 @@ void WebServer::generateResponse(int clientNum)
 	else
 	{
 		client.response = defaultResponse();
-		mPollFdVector[clientNum].events |= POLLOUT;
+		// mPollFdVector[clientNum].events |= POLLOUT;
 	}
+	client.parser.reset();
+	client.responseReady = true;
+	client.bytesSent = 0;
+	return (true);
 }
 
 /**
@@ -415,14 +417,7 @@ bool WebServer::sendResponse(int clientNum)
 					 MSG_NOSIGNAL);
 		if (bytes < 0)
 		{
-			if (errno == EAGAIN || errno == EWOULDBLOCK)
-			{
-				break;
-			}
-			else
-			{
-				return false;
-			}
+			return (false);
 		}
 		client.bytesSent += bytes;
 	}
@@ -477,14 +472,13 @@ void signalHandler(int sig)
  * \param buffer buffer which holds data read from socket FD using recv
  * \param bytesRead amount of bytes read by recv
  */
-void appendClientRequest(std::string &request, const char buffer[4096], int bytesRead)
+void appendRequestFromBuffer(std::string &request, const char buffer[4096], int bytesRead)
 {
-	int			blankChars = 0;
-	std::string blank("\r\n");
+	int blankChars = 0;
 
-	while (buffer[blankChars])
+	while (blankChars < bytesRead)
 	{
-		if (blank.find_first_of(buffer[blankChars]) == std::string::npos)
+		if (buffer[blankChars] != '\r' && buffer[blankChars] != '\n')
 			break;
 		blankChars++;
 	}

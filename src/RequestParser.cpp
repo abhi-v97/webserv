@@ -1,8 +1,8 @@
 #include <cctype>
 #include <fcntl.h>
+#include <algorithm>
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <unistd.h>
 
@@ -11,18 +11,214 @@
 
 RequestParser::RequestParser()
 	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1), bodyExpected(0),
-	  bodyReceived(0), mHeaderEnd(0), mClientNum(), mStatusCode(200)
-{
-}
-
-RequestParser::RequestParser(int clientNum)
-	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1), bodyExpected(0),
-	  mStatusCode(200)
+	  bodyReceived(0), mHeaderEnd(0), mParsePos(0), mClientNum(), mStatusCode(200), mState(HEADER)
 {
 }
 
 RequestParser::~RequestParser()
 {
+}
+
+bool RequestParser::parse(std::string &requestBuffer)
+{
+	std::string		  buffer;
+
+	const size_t bufSize = requestBuffer.size();
+
+	// check for new data
+	if (mParsePos >= bufSize)
+		return (true);
+
+	// check if we have a new line to parse
+	size_t lineEnd = requestBuffer.find("\r\n", mParsePos);
+	if (lineEnd == std::string::npos)
+		return (true);
+	if (mState == HEADER)
+	{
+		std::string requestLine = requestBuffer.substr(mParsePos, lineEnd - mParsePos);
+		if (!parseHeader(requestLine))
+			return (false);
+		mParsePos += lineEnd + 2;
+	}
+	if (mState == FIELD)
+	{
+		// now parse the header fields
+		while (42)
+		{
+			size_t next = requestBuffer.find("\r\n", mParsePos);
+			if (next == std::string::npos)
+				return (true);
+			std::string fieldLine = requestBuffer.substr(mParsePos, next - mParsePos);
+			if (fieldLine.size() == 0)
+			{
+				mState = BODY;
+				break;
+			}
+			else if (parseHeaderField(fieldLine) == false)
+				return (false);
+			mParsePos = next + 2;
+		}
+	}
+	if (mState == BODY)
+	{
+		if (mMethod != POST)
+		{
+			mState = DONE;
+			parsingFinished = true;
+			requestBuffer.erase(0, mParsePos + this->getContentLength() + 2);
+			return (true);
+		}
+		if (parseBody(requestBuffer) == false)
+			return (false);
+	}
+	requestBuffer.erase(0, mParsePos);
+	mParsePos = 0;
+	return (true);
+}
+
+bool RequestParser::parseHeader(const std::string &header)
+{
+	// extract method
+	int methodEnd = header.find_first_of(' ', 0);
+	setMethod(header.substr(0, methodEnd));
+	if (mMethod == UNKNOWN)
+		return (false);
+
+	// extract uri
+	int uriEnd = header.find_first_of(' ', methodEnd + 1);
+	if (uriEnd == std::string::npos)
+		return (false);
+	mRequestUri = header.substr(methodEnd + 1, uriEnd - methodEnd - 1);
+	if (validateUri(mRequestUri) == false)
+		return (false);
+
+	// extract version
+	int versionEnd = header.find_first_of('\r', uriEnd + 1);
+	mHttpVersion = header.substr(uriEnd + 1, 8);
+	if (mHttpVersion != "HTTP/1.1" && mHttpVersion != "HTTP/1.0")
+		return (false);
+
+	// advance state
+	mState = FIELD;
+	return (true);
+}
+
+bool RequestParser::parseHeaderField(std::string &buffer)
+{
+	size_t colonPos = buffer.find(':');
+	if (colonPos == std::string::npos)
+		return (true);
+
+	std::string rawFieldName = buffer.substr(0, colonPos);
+	size_t		firstChar = rawFieldName.find_first_not_of(" \t");
+	size_t		lastChar = colonPos;
+	if (firstChar == colonPos)
+		return (false);
+
+	std::string fieldName = rawFieldName.substr(firstChar, lastChar - firstChar);
+	if (fieldName.find_first_of(" \t") != std::string::npos)
+		return (false);
+	for (std::string::iterator it = fieldName.begin(); it != fieldName.end(); it++)
+	{
+		*it = std::tolower(static_cast<unsigned char>(*it));
+	}
+
+	size_t fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
+	size_t fieldValueEnd = buffer.find_last_not_of("\r\n");
+	if (fieldValueStart == std::string::npos || fieldValueStart >= fieldValueEnd)
+		mHeaderField[fieldName] = "";
+	else
+		mHeaderField[fieldName] =
+			buffer.substr(fieldValueStart, fieldValueEnd - fieldValueStart + 1);
+	return (true);
+}
+
+bool RequestParser::parseBody(std::string &request)
+{
+	size_t contentLength = this->getContentLength();
+	size_t bodyStart = mParsePos + 4;
+
+	// init vars, triggered on first call
+	if (bodyExpected == 0 && contentLength > 0)
+	{
+		bodyExpected = contentLength;
+		bodyReceived = 0;
+		bodyToFile = false;
+		bodyFd = -1;
+		std::string tempFile;
+
+		// TODO: change tempFile so that you're writing directly to POST location (after checking
+		// uri and location is valid)
+		tempFile = "client_" + numToString(mClientNum) + ".tmp";
+		int flags = O_WRONLY | O_CREAT | O_TRUNC;
+		bodyFd = open(tempFile.c_str(), flags, 0644);
+		if (bodyFd < 0)
+			return (false);
+		setNonBlockingFlag(bodyFd);
+	}
+
+	// no expected body, set parsing as finished
+	if (bodyExpected == 0)
+	{
+		parsingFinished = true;
+		return true;
+	}
+
+	size_t available = 0;
+	if (request.size() > bodyStart + bodyReceived)
+		available = request.size() - (bodyStart + bodyReceived);
+	if (available)
+	{
+		size_t toWrite = std::min(available, bodyExpected - bodyReceived);
+		ssize_t bytesWritten = write(bodyFd, request.data() + bodyStart + bodyReceived, toWrite);
+		if (bytesWritten < 0)
+			return (false);
+		bodyReceived += static_cast<size_t>(bytesWritten);
+		mParsePos = bodyStart + bytesWritten;
+	}
+
+	if (bodyReceived >= bodyExpected)
+	{
+		parsingFinished = true;
+		mState = DONE;
+	}
+	return true;
+}
+
+/**
+	\brief extremely minimalist URI parser.
+
+	Simply looks for '/' as the first character or "http://" at the beginning.
+*/
+bool RequestParser::validateUri(const std::string &uri)
+{
+	std::string::const_iterator i = uri.begin();
+
+	if (*i == '/')
+		return (true);
+	else if (uri.find("http://", 0, 7) != std::string::npos)
+	{
+		mRequestUri = mRequestUri.substr(6);
+		return (true);
+	}
+	return (false);
+}
+
+// TODO: optional: http1.1 also supports a keep-alive header field, where client
+// can specify how many further requests to accept before closing
+int RequestParser::keepAlive()
+{
+	if (*(mHttpVersion.rbegin()) == '0')
+		return (0);
+	if (mHeaderField.find("connection") != mHeaderField.end())
+	{
+		if (mHeaderField["connection"] == "keep-alive")
+		{
+			mHeaderField.erase("connection");
+			return 1;
+		}
+	}
+	return 0;
 }
 
 void RequestParser::reset()
@@ -34,47 +230,22 @@ void RequestParser::reset()
 	bodyExpected = 0;
 	bodyReceived = 0;
 	mHeaderEnd = 0;
+	mParsePos = 0;
 	mRequestUri.clear();
 	mHttpVersion.clear();
 	mHeaderField.clear();
-}
-
-void RequestParser::setMethod(const std::string &methodStr)
-{
-	if (methodStr == "GET")
-	{
-		mMethod = GET;
-	}
-	else if (methodStr == "HEAD")
-	{
-		mMethod = HEAD;
-	}
-	else if (methodStr == "POST")
-	{
-		mMethod = POST;
-	}
+	mState = HEADER;
 }
 
 size_t RequestParser::getContentLength()
 {
 	size_t result;
-	if (mMethod == GET || mMethod == HEAD)
+
+	if (mHeaderField.find("content-length") != mHeaderField.end())
 	{
-		return 0;
-	}
-	else if (mMethod == POST)
-	{
-		if (mHeaderField.find("content-length") != mHeaderField.end())
-		{
-			std::stringstream lengthStream(mHeaderField["content-length"]);
-			lengthStream >> result;
-			if (result > MAX_BODY_IN_MEM)
-			{
-				// TODO: content length is too long, idk, throw an exception or
-				// something
-			}
-			return result;
-		}
+		std::stringstream lengthStream(mHeaderField["content-length"]);
+		lengthStream >> result;
+		return result;
 	}
 	return 0;
 }
@@ -99,178 +270,23 @@ bool RequestParser::getParsingFinished() const
 	return this->parsingFinished;
 }
 
-void RequestParser::parseHeader(const std::string &header)
-{
-	std::istringstream headerStream(header);
-	std::string		   methodStr;
-
-	headerStream >> methodStr;
-	setMethod(methodStr);
-	headerStream >> mRequestUri;
-	headerStream >> mHttpVersion;
-}
-
-// TODO: optional: http1.1 also supports a keep-alive header field, where client
-// can specify how many further requests to accept before closing
-int RequestParser::keepAlive()
-{
-	if (mHeaderField.find("connection") != mHeaderField.end())
-	{
-		if (mHeaderField["connection"] == "keep-alive")
-		{
-			mHeaderField.erase("connection");
-			return 1;
-		}
-	}
-	return 0;
-}
-
 void RequestParser::setHeaderEnd(const size_t &headerEnd)
 {
 	this->mHeaderEnd = headerEnd;
 }
 
-void RequestParser::setParsingFinished(const bool &status)
+void RequestParser::setMethod(const std::string &methodStr)
 {
-	this->parsingFinished = status;
-}
-
-void RequestParser::parse(const std::string &requestBuffer)
-{
-	std::stringstream inf(requestBuffer);
-	std::string		  buffer;
-
-	// parse the header line on its own
-	std::getline(inf, buffer);
-	parseHeader(buffer);
-
-	// now parse the header fields
-	for (; std::getline(inf, buffer);)
+	if (methodStr == "GET")
 	{
-		if (buffer.empty() || buffer == "\r")
-		{
-			break;
-		}
-
-		size_t colonPos = buffer.find(':');
-		if (colonPos == std::string::npos)
-		{
-			throw std::runtime_error("Header line is missing a colon separator.");
-		}
-
-		std::string rawFieldName = buffer.substr(0, colonPos);
-		size_t		firstChar = rawFieldName.find_first_not_of(" \t");
-		size_t		lastChar = rawFieldName.find_last_not_of(" \t");
-		if (firstChar == std::string::npos)
-		{
-			throw std::runtime_error("Field name is empty or only whitespace.");
-		}
-
-		std::string fieldName = rawFieldName.substr(firstChar, lastChar - firstChar + 1);
-		if (fieldName.find_first_of(" \t") != std::string::npos)
-		{
-			throw std::runtime_error("Field name contains whitespace");
-		}
-		for (int i = 0; i < fieldName.size(); i++)
-		{
-			fieldName[i] = std::tolower(static_cast<unsigned char>(fieldName[i]));
-		}
-		// std::cout << "Field name: " << fieldName << "." << std::endl;
-
-		size_t		fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
-		size_t		fieldValueEnd = buffer.find_last_not_of("\r\n");
-		std::string fieldValue;
-		if (fieldValueStart == std::string::npos)
-		{
-			fieldValue = "";
-		}
-		else
-		{
-			fieldValue = buffer.substr(fieldValueStart, fieldValueEnd - fieldValueStart + 1);
-		}
-		mHeaderField[fieldName] = fieldValue;
-		// std::cout << fieldName << " = " << fieldValue << "." << std::endl;
-		// yet another TODO: header fields names are case insensitive
-		// apparently.
+		mMethod = GET;
 	}
-}
-
-bool RequestParser::parseBody(std::string &request)
-{
-	size_t contentLength = this->getContentLength();
-
-	// init vars, triggered on first call
-	if (bodyExpected == 0 && contentLength > 0)
+	else if (methodStr == "HEAD")
 	{
-		bodyExpected = contentLength;
-		bodyReceived = 0;
-		bodyToFile = false;
-		bodyFd = -1;
+		mMethod = HEAD;
 	}
-
-	// no expected body, set parsing as finished
-	if (bodyExpected == 0)
+	else if (methodStr == "POST")
 	{
-		parsingFinished = true;
-		return true;
+		mMethod = POST;
 	}
-
-	// size of body, which is total request size - header size and CRLF
-	size_t bodyBufferSize = request.size() - mHeaderEnd - 4;
-
-	// check if body size is greater than what we can hold in memory
-	if (!bodyToFile && bodyReceived + bodyBufferSize > MAX_BODY_IN_MEM)
-	{
-		std::string tempFile;
-
-		tempFile = "client_" + numToString(mClientNum) + ".tmp";
-		int flags = O_WRONLY | O_CREAT | O_TRUNC;
-		int fd = open(tempFile.c_str(), flags, 0644);
-		setNonBlockingFlag(fd);
-
-		if (fd > 0)
-		{
-			bodyFd = fd;
-			bodyToFile = true;
-		}
-		else
-		{
-			// TODO: handle this error better
-			// wrap it in an exception, or simply close the client
-			// connection and return
-			std::cerr << strerror(errno) << std::endl;
-		}
-	}
-
-	// write data to file or buffer
-	if (bodyToFile)
-	{
-		ssize_t bytesWritten =
-			write(bodyFd, request.data() + mHeaderEnd + 4 + bodyReceived, bodyBufferSize);
-		if (bytesWritten > 0)
-		{
-			bodyReceived += bytesWritten;
-		}
-	}
-	else
-	{
-		bodyReceived += bodyBufferSize;
-	}
-
-	// check if all data has been parsed
-	if (bodyReceived >= bodyExpected)
-	{
-		request.erase(mHeaderEnd + 4, bodyReceived); // remove header plus CRLF
-
-		if (bodyToFile)
-		{
-			close(bodyFd);
-			bodyFd = -1;
-			bodyToFile = false;
-		}
-		bodyExpected = 0;
-		bodyReceived = 0;
-		return true;
-	}
-	return false;
 }
