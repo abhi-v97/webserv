@@ -50,6 +50,7 @@ struct ClientState
 	ResponseBuilder responseObj;   /**< Response builder object */
 	CgiHandler		cgiObj;		   /**< CGI handler object */
 	bool			responseReady; /**< set to true if a response is ready to send */
+	bool keepAlive;
 };
 
 /** \class WebServer
@@ -96,7 +97,6 @@ private:
 
 bool setNonBlockingFlag(int socketFd);
 void signalHandler(int sig);
-void appendRequestFromBuffer(std::string &request, const char buffer[4096], int bytesRead);
 
 #endif /* ******************************************************* WEBSERVER_H                      \
 		*/

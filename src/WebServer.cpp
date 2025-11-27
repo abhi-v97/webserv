@@ -205,16 +205,17 @@ void WebServer::startListen()
 				{
 					// if we have enough data, send reponse to client
 					if (sendResponse(i) == true)
+					{
+						mClients[mPollFdVector[i].fd].responseReady = false;
 						parseRequest(i);
+					}
+					// if client requests to keep connection alive
+					if (mClients[mPollFdVector[i].fd].keepAlive == false)
+						closeConnection(i);
 					continue;
 				}
 				// if all data has been sent, remove POLLOUT flag
 				mPollFdVector[i].events &= ~POLLOUT;
-
-				// if client requests to keep connection alive
-				if (mClients[mPollFdVector[i].fd].parser.keepAlive())
-					continue;
-				closeConnection(i);
 			}
 		}
 	}
@@ -223,7 +224,7 @@ void WebServer::startListen()
 /**
 	\brief Handles accepting new clients
 
-	Accepts the client connection, then stores client info and updates the
+	Accepts the client connection, t hen stores client info and updates the
 	mClients container with new client
 
 	\param socket The listening socket that client used to contact the server
@@ -269,6 +270,7 @@ void WebServer::acceptConnection(int listenFd)
 	state.clientIp = clientIp.str();
 	state.parser = RequestParser();
 	state.responseReady = false;
+	state.keepAlive = false;
 	mClients[newSocket] = state;
 }
 
@@ -311,9 +313,7 @@ void WebServer::readFromSocket(int clientNum)
 		closeConnection(clientNum);
 		return;
 	}
-
-	// skips empty lines and appends rest into client.request
-	appendRequestFromBuffer(client.request, buffer, bytesRead);
+	client.request.append(buffer, bytesRead);
 }
 
 void WebServer::parseRequest(int clientNum)
@@ -327,6 +327,8 @@ void WebServer::parseRequest(int clientNum)
 
 	if (requestObj.parse(client.request) == false)
 	{
+		mLog->log(ERROR, std::string("invalid request, closing connection ") +
+					  numToString(client.fd));
 		closeConnection(clientNum);
 		return;
 	}
@@ -393,6 +395,7 @@ bool WebServer::generateResponse(int clientNum)
 		client.response = defaultResponse();
 		// mPollFdVector[clientNum].events |= POLLOUT;
 	}
+	client.keepAlive = client.parser.keepAlive();
 	client.parser.reset();
 	client.responseReady = true;
 	client.bytesSent = 0;
@@ -462,25 +465,4 @@ bool setNonBlockingFlag(int socketFd)
 void signalHandler(int sig)
 {
 	gSignal = sig;
-}
-
-/**
- * \brief Helper function which skips empty lines in buffer and appends the rest into request string
- * for parsing
- *
- * \param request std::string request that is used later for request parsing
- * \param buffer buffer which holds data read from socket FD using recv
- * \param bytesRead amount of bytes read by recv
- */
-void appendRequestFromBuffer(std::string &request, const char buffer[4096], int bytesRead)
-{
-	int blankChars = 0;
-
-	while (blankChars < bytesRead)
-	{
-		if (buffer[blankChars] != '\r' && buffer[blankChars] != '\n')
-			break;
-		blankChars++;
-	}
-	request.append(buffer + blankChars, bytesRead - blankChars);
 }

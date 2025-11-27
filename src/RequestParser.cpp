@@ -35,10 +35,18 @@ bool RequestParser::parse(std::string &requestBuffer)
 		return (true);
 	if (mState == HEADER)
 	{
+		for (; mParsePos < requestBuffer.size(); mParsePos++)
+		{
+			if (requestBuffer[mParsePos] != '\r' && requestBuffer[mParsePos] != '\n')
+				break;
+		}
+		lineEnd = requestBuffer.find("\r\n", mParsePos);
 		std::string requestLine = requestBuffer.substr(mParsePos, lineEnd - mParsePos);
+		if (requestLine.size() == 0)
+			return (true);
 		if (!parseHeader(requestLine))
 			return (false);
-		mParsePos += lineEnd + 2;
+		mParsePos = lineEnd + 2;
 	}
 	if (mState == FIELD)
 	{
