@@ -14,9 +14,9 @@
 #include <vector>
 
 #include "CgiHandler.hpp"
-#include "Logger.hpp"
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
+#include "configParser.hpp"
 
 // TODO: global vars for now, store them later in a struct or macro
 // struct is probably better if we want to be able to modify these through the
@@ -29,7 +29,6 @@ static const size_t MAX_BODY_IN_MEM = 1;
 // 	16 * 1024); // body size to store as a buffer, 16kb for test
 static const size_t MAX_BODY_TOTAL =
 	static_cast<const size_t>(1 * 1024 * 1024); // 1mb max size for body
-#include "configParser.hpp"
 
 /** \struct ClientState
 	Struct used to store client information
@@ -60,7 +59,6 @@ struct ClientState
 class WebServer
 {
 public:
-	WebServer(std::string ipAddress, int port);
 	WebServer(std::string ipAddress, const std::vector<ServerConfig> &srv);
 	~WebServer();
 
@@ -87,7 +85,6 @@ private:
 	std::map<int, ClientState> mClients;		   /**< map container to hold client info */
 	std::vector<pollfd>		   mPollFdVector;	   /**< vector container to hold socket
 													  info for each connection*/
-	Logger *mLog;
 
 	bool checkCgi(int clientNum);
 };

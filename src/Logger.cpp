@@ -1,11 +1,12 @@
 #include <ctime>
-#include <sstream>
 #include <iostream>
 #include <ostream>
+#include <sstream>
 
 #include "Logger.hpp"
 
 #define BUF_SIZE 50
+
 
 // static member init
 Logger *Logger::mLogger = NULL;
@@ -17,8 +18,8 @@ Logger *Logger::mLogger = NULL;
 Logger::Logger()
 {
 	std::time_t timeNow;
-	struct tm *timeStruct;
-	char buffer[BUF_SIZE];
+	struct tm  *timeStruct;
+	char		buffer[BUF_SIZE];
 
 	std::time(&timeNow);
 	timeStruct = std::localtime(&timeNow);
@@ -30,10 +31,18 @@ Logger::Logger()
 ** -------------------------------- DESTRUCTOR --------------------------------
 */
 
+void Logger::deleteLogger()
+{
+	if (Logger::mLogger)
+	{
+		delete Logger::mLogger;
+		Logger::mLogger = NULL;
+	}
+}
+
 Logger::~Logger()
 {
 	Logger::mFile.close();
-	delete mLogger;
 }
 
 /*
@@ -78,8 +87,8 @@ std::string levelToString(LogLevel level)
 std::string getTimestamp(void)
 {
 	std::time_t timeNow;
-	struct tm *timeStruct;
-	char buffer[BUF_SIZE];
+	struct tm  *timeStruct;
+	char		buffer[BUF_SIZE];
 
 	std::time(&timeNow);
 	timeStruct = std::localtime(&timeNow);
@@ -95,26 +104,18 @@ std::string getTimestamp(void)
 void Logger::log(LogLevel level, const std::string &msg)
 {
 	static std::ostringstream buf;
-    buf.str("");
-    buf.clear();
+	buf.str("");
+	buf.clear();
 
-    buf << getTimestamp();
-    buf << "[" << levelToString(level) << "] : ";
-    buf << msg << '\n';
+	buf << getTimestamp();
+	buf << "[" << levelToString(level) << "] : ";
+	buf << msg << '\n';
 
-    std::string line = buf.str();
-    mFile << line;
-    mFile.flush();
-    std::cout << line;
-    std::cout.flush();
-}
-
-void Logger::logFile(LogLevel level, const std::string &msg)
-{
-	mFile << getTimestamp();
-    mFile << "[" << levelToString(level) << "] : ";
-    mFile << msg << '\n';
+	std::string line = buf.str();
+	mFile << line;
 	mFile.flush();
+	std::cout << line;
+	std::cout.flush();
 }
 
 /*

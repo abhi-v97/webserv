@@ -8,14 +8,18 @@ OBJ_DIR = obj
 SRC_DIR = src
 INC_DIR = inc
 
+# SRC := $(shell find $(SRC_DIR) -type f -name '*.cpp'
 SRC =		src/main.cpp \
-			src/WebServer.cpp \
 			src/CgiHandler.cpp \
 			src/ResponseBuilder.cpp \
 			src/Logger.cpp \
 			src/configParser.cpp \
 			src/configLexer.cpp \
-			src/RequestParser.cpp
+			src/RequestParser.cpp \
+			src/Acceptor.cpp \
+			src/Connection.cpp \
+			src/Utils.cpp \
+			src/Reactor.cpp 
 
 OBJS = ${SRC:${SRC_DIR}/%.cpp=${OBJ_DIR}/%.o}
 

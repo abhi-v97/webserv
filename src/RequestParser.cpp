@@ -7,7 +7,9 @@
 #include <unistd.h>
 
 #include "RequestParser.hpp"
-#include "WebServer.hpp" // TODO: included for the global vars, probably unneccessary so remove later
+#include "Logger.hpp"
+#include "Utils.hpp"
+// #include "WebServer.hpp" // TODO: included for the global vars, probably unneccessary so remove later
 
 RequestParser::RequestParser()
 	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1), bodyExpected(0),

@@ -31,8 +31,7 @@ int gSignal = 0;
 */
 
 WebServer::WebServer(std::string ipAddress, const std::vector<ServerConfig> &srv)
-	: mIpAddress(ipAddress), mLog(Logger::getInstance())
-
+	: mIpAddress(ipAddress)
 {
 	for (std::vector<ServerConfig>::const_iterator it = srv.begin(); it != srv.end(); it++)
 	{
@@ -45,7 +44,7 @@ WebServer::WebServer(std::string ipAddress, const std::vector<ServerConfig> &srv
 			socketAddress.sin_addr.s_addr = inet_addr(mIpAddress.c_str());
 			if (bindPort(socketAddress) != 0)
 			{
-				mLog->log(NOTICE, "Failed to bind port: " + numToString(*it));
+				LOG_ERROR("Failed to bind port: " + numToString(*it));
 				continue;
 			}
 			mSocketAddressStruct.push_back(socketAddress);
@@ -53,29 +52,9 @@ WebServer::WebServer(std::string ipAddress, const std::vector<ServerConfig> &srv
 	}
 	if (mSocketAddressStruct.size() < 1)
 	{
-		mLog->log(ERROR, "Failed to bind given ports");
+		LOG_ERROR("Failed to bind given ports");
 		throw std::runtime_error("No ports bound, server shutting down");
 	}
-}
-
-// old code, use it to initialise a single ip address + port combo
-WebServer::WebServer(std::string ipAddress, int port)
-	: mIpAddress(ipAddress), mLog(Logger::getInstance())
-{
-	sockaddr_in socketAddress = sockaddr_in();
-	socketAddress.sin_family = AF_INET;
-	socketAddress.sin_port = htons(port);
-	// TODO: inet_addr not an allowed function?
-	socketAddress.sin_addr.s_addr = inet_addr(mIpAddress.c_str());
-
-	// setup signal handling
-	std::signal(SIGINT, SIG_IGN);
-	std::signal(SIGINT, signalHandler);
-	if (bindPort(socketAddress) != 0)
-	{
-		mLog->log(NOTICE, "Failed to start server, shutting down");
-	}
-	mSocketAddressStruct.push_back(socketAddress);
 }
 
 /*
@@ -84,7 +63,7 @@ WebServer::WebServer(std::string ipAddress, int port)
 
 WebServer::~WebServer()
 {
-	mLog->log(NOTICE, "destructor called, web server shutting down");
+	LOG_NOTICE("destructor called, web server shutting down");
 	std::signal(SIGINT, SIG_DFL);
 	for (size_t i = 0; i < mSocketVector.size(); i++)
 	{
@@ -114,12 +93,11 @@ int WebServer::bindPort(sockaddr_in socketStruct)
 	int mSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (mSocket < 0)
 	{
-		mLog->log(ERROR, std::string("socket() failed: ") + std::strerror(errno));
+		LOG_ERROR(std::string("socket() failed: ") + std::strerror(errno));
 		return 1;
 	}
-	mLog->log(NOTICE,
-			  std::string("Socket created with value: ") +
-				  numToString(ntohs(socketStruct.sin_port)));
+	LOG_NOTICE(std::string("Socket created with value: ") +
+			   numToString(ntohs(socketStruct.sin_port)));
 
 	// OS doesn't immediately free the port, which causes web server to hang
 	// if you close and reopen it quickly. This tells our server that we can
@@ -127,7 +105,7 @@ int WebServer::bindPort(sockaddr_in socketStruct)
 	int enable = 1;
 	if (setsockopt(mSocket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
 	{
-		mLog->log(ERROR, std::string("setsockopt(SO_REUSEADDR) failed: ") + std::strerror(errno));
+		LOG_ERROR(std::string("setsockopt(SO_REUSEADDR) failed: ") + std::strerror(errno));
 		return 1;
 	}
 
@@ -137,12 +115,11 @@ int WebServer::bindPort(sockaddr_in socketStruct)
 	// bind socket and server port
 	if (bind(mSocket, (sockaddr *) &socketStruct, sizeof(socketStruct)) < 0)
 	{
-		mLog->log(ERROR, std::string("bind() failed: ") + std::strerror(errno));
+		LOG_ERROR(std::string("bind() failed: ") + std::strerror(errno));
 		return 1;
 	}
-	mLog->log(NOTICE,
-			  std::string("bind success: ") + numToString(mIpAddress) + std::string(":") +
-				  numToString(socketStruct.sin_port));
+	LOG_NOTICE(std::string("bind success: ") + numToString(mIpAddress) + std::string(":") +
+			   numToString(socketStruct.sin_port));
 	mSocketVector.push_back(mSocket);
 	return 0;
 }
@@ -166,7 +143,7 @@ void WebServer::startListen()
 	{
 		if (listen(mSocketVector.at(i), LISTEN_REQUESTS) < 0)
 		{
-			mLog->log(ERROR, std::string("listen() failed: ") + std::strerror(errno));
+			LOG_ERROR(std::string("listen() failed: ") + std::strerror(errno));
 			return;
 		}
 		struct pollfd listenStruct = {mSocketVector.at(i), POLLIN, 0};
@@ -181,7 +158,7 @@ void WebServer::startListen()
 		int pollNum = poll(mPollFdVector.data(), static_cast<int>(mPollFdVector.size()), 1);
 		if (pollNum < 0)
 		{
-			mLog->log(ERROR, std::string("poll() failed: ") + std::strerror(errno));
+			LOG_ERROR(std::string("poll() failed: ") + std::strerror(errno));
 		}
 		for (int i = static_cast<int>(mPollFdVector.size()) - 1; i >= 0; i--)
 		{
@@ -235,14 +212,14 @@ void WebServer::acceptConnection(int listenFd)
 	newSocket = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
 	if (newSocket < 0)
 	{
-		mLog->log(ERROR, std::string("accept() failed: ") + std::strerror(errno));
+		LOG_ERROR(std::string("accept() failed: ") + std::strerror(errno));
 	}
-	mLog->log(NOTICE, std::string("accepted client with fd: ") + numToString(newSocket));
+	LOG_NOTICE(std::string("accepted client with fd: ") + numToString(newSocket));
 
 	// set acceptd client socket to be non-blocking
 	if (!setNonBlockingFlag(newSocket))
 	{
-		mLog->log(WARNING, std::string("failed to set client as non-blocking"));
+		LOG_WARNING(std::string("failed to set client as non-blocking"));
 	}
 
 	// get client IP from sockaddr struct, store it as std::string
@@ -274,8 +251,7 @@ void WebServer::acceptConnection(int listenFd)
 
 void WebServer::closeConnection(int clientNum)
 {
-	mLog->log(NOTICE,
-			  std::string("closing connection ") + numToString(mPollFdVector[clientNum].fd));
+	LOG_NOTICE(std::string("closing connection ") + numToString(mPollFdVector[clientNum].fd));
 	close(mPollFdVector[clientNum].fd);
 	mClients.erase(mPollFdVector[clientNum].fd);
 	mPollFdVector.erase(mPollFdVector.begin() + clientNum);
@@ -298,14 +274,13 @@ void WebServer::readFromSocket(int clientNum)
 	bytesRead = recv(mPollFdVector[clientNum].fd, buffer, 4096, 0);
 	if (bytesRead < 0)
 	{
-		mLog->log(WARNING, "recv() failed to read from socket");
+		LOG_WARNING("recv() failed to read from socket");
 		return;
 	}
 	else if (bytesRead == 0)
 	{
-		mLog->log(NOTICE,
-				  std::string("recv(): zero bytes received, closing connection ") +
-					  numToString(client.fd));
+		LOG_NOTICE(std::string("recv(): zero bytes received, closing connection ") +
+				   numToString(client.fd));
 		closeConnection(clientNum);
 		return;
 	}
@@ -323,8 +298,7 @@ void WebServer::parseRequest(int clientNum)
 
 	if (requestObj.parse(client.request) == false)
 	{
-		mLog->log(ERROR,
-				  std::string("invalid request, closing connection ") + numToString(client.fd));
+		LOG_ERROR(std::string("invalid request, closing connection ") + numToString(client.fd));
 		closeConnection(clientNum);
 		return;
 	}

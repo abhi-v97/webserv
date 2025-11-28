@@ -1,5 +1,6 @@
-#include "RequestParser.hpp"
-#include "WebServer.hpp"
+#include "Logger.hpp"
+#include "Acceptor.hpp"
+#include "Reactor.hpp"
 #include "configParser.hpp"
 
 int main(int argc, char **argv)
@@ -7,21 +8,25 @@ int main(int argc, char **argv)
 	std::string configFile;
 
 	if (argc < 2)
-	{
 		configFile = "default.conf";
-	}
 	else
-	{
 		configFile = std::string(argv[1]);
+
+	Acceptor				  acceptor;
+	configParser			  parser(configFile);
+	std::vector<ServerConfig> srv;
+
+	srv = parser.servers;
+	for (std::vector<ServerConfig>::iterator it = srv.begin(); it != srv.end(); it++)
+	{
+		acceptor.init((*it).listenPorts);
 	}
-	configParser parser(configFile);
-	const ServerConfig &srv = parser.servers[0];
+	
+	Reactor reactor;
 
-	WebServer webServer = WebServer("127.0.0.1", parser.servers);
-	webServer.startListen();
+	reactor.setListeners(acceptor.listeners());
+	reactor.loop();
 
-	// RequestParser test = RequestParser();
-	//
-	// test.parse("test");
-	return 0;
+	Logger::deleteLogger();
+	return (0);
 }

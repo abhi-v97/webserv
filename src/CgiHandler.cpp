@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #include "CgiHandler.hpp"
-#include "WebServer.hpp"
+#include "Reactor.hpp"
 
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
