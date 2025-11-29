@@ -27,12 +27,11 @@ struct Connection
 	bool			keepAlive;
 	bool			responseReady;
 
-
 	short events;
 
-	void onReadable(); // read + append to request
-	bool parseRequest();	   // parse from request, may produce response
-	bool onWritable(); // send remaining response
-	void closeConnection();
+	void onReadable();	 // read + append to request
+	bool parseRequest(); // parse from request, may produce response
+	bool onWritable();	 // send remaining response
 	bool generateResponse();
+	bool getKeepAlive() const;
 };

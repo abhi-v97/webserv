@@ -3,10 +3,9 @@
 #include <sys/socket.h>
 
 #include "Connection.hpp"
+#include "Logger.hpp"
 #include "Reactor.hpp"
 #include "Utils.hpp"
-
-#include "Logger.hpp"
 
 #define MAX_LISTEN_REQUESTS 8
 
@@ -59,9 +58,7 @@ void Reactor::addConnection(int listenFd)
 
 	newSocket = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
 	if (newSocket < 0)
-	{
 		LOG_ERROR(std::string("accept() failed: ") + std::strerror(errno));
-	}
 	LOG_NOTICE(std::string("accepted client with fd: ") + numToString(newSocket));
 
 	// get client IP from sockaddr struct, store it as std::string
@@ -124,13 +121,15 @@ void Reactor::loop()
 						mClients[mPollFds[i].fd].parseRequest();
 					}
 					// if client requests to keep connection alive
-					if (mClients[mPollFds[i].fd].keepAlive == false)
-						mClients[mPollFds[i].fd].closeConnection();
+					// if (mClients[mPollFds[i].fd].keepAlive == false)
+					// 	mClients[mPollFds[i].fd].requestClose();
 					continue;
 				}
 				// if all data has been sent, remove POLLOUT flag
 				mPollFds[i].events &= ~POLLOUT;
 			}
+			if (mClients[mPollFds[i].fd].getKeepAlive() == false)
+				removeConnection(mPollFds[i].fd);
 		}
 	}
 }

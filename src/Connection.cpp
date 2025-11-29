@@ -16,7 +16,7 @@ Connection::Connection(int socket, const std::string &ipAddr)
 	parser = RequestParser();
 	cgiObj = CgiHandler();
 	responseReady = false;
-	keepAlive = false;
+	keepAlive = true;
 }
 
 Connection::Connection(const Connection &obj)
@@ -54,7 +54,7 @@ void Connection::onReadable()
 	{
 		LOG_NOTICE(std::string("recv(): zero bytes received, closing connection ") +
 				   numToString(mFd));
-		closeConnection();
+		keepAlive = false;
 		return;
 	}
 	mRequest.append(buffer, bytesRead);
@@ -118,12 +118,13 @@ bool Connection::parseRequest()
 	if (parser.parse(mRequest) == false)
 	{
 		LOG_ERROR(std::string("invalid request, closing connection ") + numToString(mFd));
-		closeConnection();
+		keepAlive = false;
 		return (false);
 	}
 	return (parser.getParsingFinished());
 }
 
-void Connection::closeConnection()
+bool Connection::getKeepAlive() const
 {
+	return (this->keepAlive);
 }

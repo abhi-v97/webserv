@@ -23,8 +23,9 @@ bool Acceptor::init(std::vector<int> ports)
 		socketAddress.sin_family = AF_INET;
 		socketAddress.sin_port = htons(*it);
 		socketAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
-		if (bindPort(socketAddress) != 0)
+		if (bindPort(socketAddress) != true)
 		{
+			std::cerr << std::strerror(errno) << std::endl;
 			LOG_ERROR("Failed to bind port: " + numToString(*it));
 			return (false);
 		}
