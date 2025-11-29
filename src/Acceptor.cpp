@@ -60,7 +60,7 @@ bool Acceptor::bindPort(sockaddr_in socketStruct)
 		LOG_ERROR(std::string("socket() failed: ") + std::strerror(errno));
 		return (false);
 	}
-	LOG_NOTICE(std::string("Socket created: ") + numToString(ntohs(socketStruct.sin_port)));
+	LOG_NOTICE(std::string("Socket created: ") + numToString(mSocket));
 
 	// OS doesn't immediately free the port, which causes web server to hang
 	// if you close and reopen it quickly. This tells our server that we can
@@ -82,7 +82,7 @@ bool Acceptor::bindPort(sockaddr_in socketStruct)
 		return (false);
 	}
 	LOG_NOTICE(std::string("bind success: ") + numToString("127.0.0.1") + std::string(":") +
-			   numToString(socketStruct.sin_port));
+			   numToString(ntohs(socketStruct.sin_port)));
 	mListeners.push_back(mSocket);
 	return (true);
 }

@@ -90,6 +90,7 @@ void Reactor::removeConnection(int clientFd)
 
 void Reactor::loop()
 {
+	std::signal(SIGINT, SIG_IGN);
 	std::signal(SIGINT, signalHandler);
 	while (gSignal == 0)
 	{
@@ -103,8 +104,14 @@ void Reactor::loop()
 			if (i < mListenCount && (mPollFds[i].revents & POLLIN))
 			{
 				addConnection(mPollFds[i].fd);
+				continue;
 			}
-			else if (mPollFds[i].revents & POLLIN)
+			else if (i >= mListenCount && mClients[mPollFds[i].fd].getKeepAlive() == false)
+			{
+				removeConnection(i);
+				continue;
+			}
+			if (mPollFds[i].revents & POLLIN)
 			{
 				mClients[mPollFds[i].fd].onReadable();
 				if (mClients[mPollFds[i].fd].parseRequest() == true)
@@ -128,8 +135,6 @@ void Reactor::loop()
 				// if all data has been sent, remove POLLOUT flag
 				mPollFds[i].events &= ~POLLOUT;
 			}
-			if (mClients[mPollFds[i].fd].getKeepAlive() == false)
-				removeConnection(mPollFds[i].fd);
 		}
 	}
 }
