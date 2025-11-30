@@ -5,15 +5,17 @@
 #include <unistd.h>
 
 #include "CgiHandler.hpp"
+#include "IHandler.hpp"
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
 
-struct Connection
+class ClientHandler: public IHandler
 {
-	Connection();
-	Connection(int socket, const std::string &ipAddr);
-	Connection(const Connection &obj);
-	~Connection();
+public:
+	ClientHandler();
+	ClientHandler(int socket, const std::string &ipAddr);
+	ClientHandler(const ClientHandler &obj);
+	~ClientHandler();
 
 	int				mFd;
 	std::string		mRequest;
@@ -34,4 +36,7 @@ struct Connection
 	bool onWritable();	 // send remaining response
 	bool generateResponse();
 	bool getKeepAlive() const;
+
+	void handleEvents(short revents);
+	int	 getFd() const;
 };

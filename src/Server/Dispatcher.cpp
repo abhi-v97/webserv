@@ -1,0 +1,183 @@
+#include <csignal>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
+#include "ClientHandler.hpp"
+#include "Dispatcher.hpp"
+#include "IHandler.hpp"
+#include "Listener.hpp"
+#include "Logger.hpp"
+#include "Utils.hpp"
+
+#define MAX_LISTEN_REQUESTS 8
+
+/** \var gSignal
+	Global variable used to store signal information
+*/
+int gSignal = 0;
+
+Dispatcher::Dispatcher()
+{
+}
+
+Dispatcher::~Dispatcher()
+{
+	LOG_NOTICE("destructor called, web server shutting down");
+	std::signal(SIGINT, SIG_DFL);
+	for (int i = 0; i < mPollFds.size(); i++)
+	{
+		close(mPollFds[i].fd);
+	}
+}
+
+/**
+	\brief factory method to create a listener handler for each port
+
+	If the bind was successful (might fail if port is already in use), adds the created object to
+	map mHandler
+*/
+void Dispatcher::createListener(int port)
+{
+	IHandler *listener = new Listener(port, this);
+
+	if (static_cast<Listener *>(listener)->bindPort() == true)
+		mHandler[listener->getFd()] = listener;
+	else
+		delete listener;
+}
+
+bool Dispatcher::setListeners()
+{
+	mListenCount = mHandler.size();
+	if (mListenCount == 0)
+	{
+		LOG_FATAL("No ports bound, shutting down");
+		return (false);
+	}
+	mPollFds.reserve(mListenCount);
+	for (std::map<int, IHandler *>::const_iterator it = mHandler.begin(); it != mHandler.end(); it++)
+	{
+		if (listen((*it).first, MAX_LISTEN_REQUESTS) < 0)
+		{
+			LOG_ERROR(std::string("listen() failed: ") + std::strerror(errno));
+			return (false);
+		}
+		struct pollfd listenStruct = {(*it).first, POLLIN, 0};
+		mPollFds.push_back(listenStruct);
+	}
+	return (true);
+}
+
+void Dispatcher::addClient(int listenFd)
+{
+	int				   newSocket;
+	struct sockaddr_in clientAddr = {};
+	socklen_t		   clientLen = sizeof(clientAddr);
+
+	newSocket = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
+	if (newSocket < 0)
+	{
+		LOG_ERROR(std::string("accept() failed: ") + std::strerror(errno));
+		return;
+	}
+	LOG_NOTICE(std::string("accepted client with fd: ") + numToString(newSocket));
+
+	// get client IP from sockaddr struct, store it as std::string
+	std::ostringstream clientIp;
+	clientIp << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24) << std::endl;
+
+	std::cout << "TEST: clientIp: " << clientIp.str() << std::endl;
+
+	// update the pollfd struct
+	struct pollfd newClient = {newSocket, POLLIN, 0};
+	mPollFds.push_back(newClient);
+
+	// set the socket to be non-blocking
+	setNonBlockingFlag(newSocket);
+
+	// update clientState with new client
+	// Connection newCon = Connection(newSocket, clientIp.str());
+	// mHandler[newSocket] = newCon;
+}
+
+void Dispatcher::removeClient(int clientFd)
+{
+	LOG_NOTICE(std::string("closing connection ") + numToString(mPollFds[clientFd].fd));
+	close(mPollFds[clientFd].fd);
+	mHandler.erase(mPollFds[clientFd].fd);
+	mPollFds.erase(mPollFds.begin() + clientFd);
+}
+
+void Dispatcher::loop()
+{
+	std::signal(SIGINT, SIG_IGN);
+	std::signal(SIGINT, signalHandler);
+	while (gSignal == 0)
+	{
+		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), 1);
+		if (pollNum < 0)
+		{
+			LOG_FATAL(std::string("poll() failed: ") + std::strerror(errno));
+		}
+		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
+		{
+			if (mPollFds[i].revents != 0)
+				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i].revents);
+		}
+		// for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
+		// {
+		// 	if (i < mListenCount && (mPollFds[i].revents & POLLIN))
+		// 	{
+		// 		addConnection(mPollFds[i].fd);
+		// 		continue;
+		// 	}
+		// 	else if (i >= mListenCount && mHandler[mPollFds[i].fd].getKeepAlive() == false)
+		// 	{
+		// 		removeConnection(i);
+		// 		continue;
+		// 	}
+		// 	if (mPollFds[i].revents & POLLIN)
+		// 	{
+		// 		mHandler[mPollFds[i].fd].onReadable();
+		// 		if (mHandler[mPollFds[i].fd].parseRequest() == true)
+		// 			mPollFds[i].events |= POLLOUT;
+		// 	}
+		// 	else if (mPollFds[i].revents & POLLOUT)
+		// 	{
+		// 		if (mHandler[mPollFds[i].fd].generateResponse() == true)
+		// 		{
+		// 			// if we have enough data, send reponse to client
+		// 			if (mHandler[mPollFds[i].fd].onWritable() == true)
+		// 			{
+		// 				mHandler[mPollFds[i].fd].responseReady = false;
+		// 				mHandler[mPollFds[i].fd].parseRequest();
+		// 			}
+		// 			// if client requests to keep connection alive
+		// 			// if (mClients[mPollFds[i].fd].keepAlive == false)
+		// 			// 	mClients[mPollFds[i].fd].requestClose();
+		// 			continue;
+		// 		}
+		// 		// if all data has been sent, remove POLLOUT flag
+		// 		mPollFds[i].events &= ~POLLOUT;
+		// 	}
+		// }
+	}
+}
+
+void Dispatcher::handleEvent(int indx)
+{
+}
+
+/**
+	Helper function which changes the global signal variable when a signal is
+	received
+
+	\param sig signal value
+*/
+void signalHandler(int sig)
+{
+	gSignal = sig;
+}

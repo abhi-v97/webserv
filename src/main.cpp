@@ -1,6 +1,5 @@
+#include "Dispatcher.hpp"
 #include "Logger.hpp"
-#include "Acceptor.hpp"
-#include "Reactor.hpp"
 #include "configParser.hpp"
 
 int main(int argc, char **argv)
@@ -12,20 +11,22 @@ int main(int argc, char **argv)
 	else
 		configFile = std::string(argv[1]);
 
-	Acceptor				  acceptor;
 	configParser			  parser(configFile);
+	Dispatcher				  dispatch;
 	std::vector<ServerConfig> srv;
 
 	srv = parser.servers;
 	for (std::vector<ServerConfig>::iterator it = srv.begin(); it != srv.end(); it++)
 	{
-		acceptor.initServerPorts((*it).listenPorts);
+		std::vector<int> &ports = (*it).listenPorts;
+		for (std::vector<int>::iterator it = ports.begin(); it != ports.end(); it++)
+			dispatch.createListener(*it);
 	}
-	
-	Reactor reactor;
 
-	reactor.setListeners(acceptor.listeners());
-	reactor.loop();
+	if (dispatch.setListeners() == false)
+		return (1);
+
+	dispatch.loop();
 
 	Logger::deleteLogger();
 	return (0);

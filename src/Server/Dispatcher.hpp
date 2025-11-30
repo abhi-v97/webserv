@@ -4,18 +4,22 @@
 #include <sys/poll.h>
 #include <vector>
 
-#include "Connection.hpp"
+#include "IHandler.hpp"
 
-class Reactor
+class Dispatcher
 {
 public:
-	Reactor();
-	~Reactor();
+	Dispatcher();
+	~Dispatcher();
 
 	// keep listeners (front of pollfds) and connections map
-	bool setListeners(const std::vector<int> &listen_fds);
-	void addConnection(int listenFd); // copy (or add by value)
-	void removeConnection(int fd);
+	void addHandler(IHandler *handler);
+	bool setListeners();
+	void addClient(int listenFd); // copy (or add by value)
+	void removeClient(int fd);
+	
+	void createListener(int port);
+	void createClient(int listenFd);
 
 	// main loop: builds pollfd array from listeners + connections and dispatches
 	void loop();
@@ -23,7 +27,7 @@ public:
 private:
 	size_t					  mListenCount;
 	std::vector<pollfd>		  mPollFds;				// built before poll()
-	std::map<int, Connection> mClients;				// key is fd
+	std::map<int, IHandler *> mHandler;				// key is fd
 	void					  handleEvent(int idx); // dispatch for a single pollfd entry
 };
 

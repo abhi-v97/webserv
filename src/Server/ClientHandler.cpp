@@ -1,13 +1,13 @@
 #include <sys/socket.h>
 
-#include "Connection.hpp"
+#include "ClientHandler.hpp"
 #include "Logger.hpp"
 
-Connection::Connection()
+ClientHandler::ClientHandler()
 {
 }
 
-Connection::Connection(int socket, const std::string &ipAddr)
+ClientHandler::ClientHandler(int socket, const std::string &ipAddr)
 {
 	bytesRead = 0;
 	bytesSent = 0;
@@ -19,7 +19,7 @@ Connection::Connection(int socket, const std::string &ipAddr)
 	keepAlive = true;
 }
 
-Connection::Connection(const Connection &obj)
+ClientHandler::ClientHandler(const ClientHandler &obj)
 {
 	bytesRead = obj.bytesRead;
 	bytesSent = obj.bytesSent;
@@ -31,11 +31,24 @@ Connection::Connection(const Connection &obj)
 	keepAlive = obj.keepAlive;
 }
 
-Connection::~Connection()
+ClientHandler::~ClientHandler()
 {
 }
 
-void Connection::onReadable()
+void ClientHandler::handleEvents(short revents)
+{
+	if (revents & POLLIN)
+		;
+	else if (revents & POLLOUT)
+		;
+}
+
+int ClientHandler::getFd() const
+{
+	return (this->mFd);
+}
+
+void ClientHandler::onReadable()
 {
 	char	buffer[4096];
 	ssize_t bytesRead;
@@ -60,7 +73,7 @@ void Connection::onReadable()
 	mRequest.append(buffer, bytesRead);
 }
 
-bool Connection::onWritable()
+bool ClientHandler::onWritable()
 {
 	ssize_t bytes = 0;
 
@@ -76,7 +89,7 @@ bool Connection::onWritable()
 	return (true);
 }
 
-bool Connection::generateResponse()
+bool ClientHandler::generateResponse()
 {
 	ssize_t bytes = 0;
 	int		isCGI = 0;
@@ -110,7 +123,7 @@ bool Connection::generateResponse()
 	return (true);
 }
 
-bool Connection::parseRequest()
+bool ClientHandler::parseRequest()
 {
 	if (mRequest.empty())
 		return (false);
@@ -124,7 +137,7 @@ bool Connection::parseRequest()
 	return (parser.getParsingFinished());
 }
 
-bool Connection::getKeepAlive() const
+bool ClientHandler::getKeepAlive() const
 {
 	return (this->keepAlive);
 }
