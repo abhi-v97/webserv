@@ -42,10 +42,10 @@ bool RequestParser::parse(std::string &requestBuffer)
 				break;
 		}
 		lineEnd = requestBuffer.find("\r\n", mParsePos);
-		std::string requestLine = requestBuffer.substr(mParsePos, lineEnd - mParsePos);
-		if (requestLine.size() == 0)
+		mRequestHeader = requestBuffer.substr(mParsePos, lineEnd - mParsePos);
+		if (mRequestHeader.size() == 0)
 			return (true);
-		if (!parseHeader(requestLine))
+		if (!parseHeader(mRequestHeader))
 			return (false);
 		mParsePos = lineEnd + 2;
 	}
@@ -75,6 +75,7 @@ bool RequestParser::parse(std::string &requestBuffer)
 			mState = DONE;
 			parsingFinished = true;
 			requestBuffer.erase(0, mParsePos + this->getContentLength() + 2);
+			LOG_NOTICE(std::string("request parsed: ") + mRequestHeader);
 			return (true);
 		}
 		if (parseBody(requestBuffer) == false)

@@ -6,6 +6,14 @@
 
 #include "IHandler.hpp"
 
+/**
+	\class Dispatcher
+
+	Maintains the server loop and all event handler objects currently in circulation.
+
+	Uses the Reactor design pattern, code flow is based on this:
+	https://en.wikipedia.org/wiki/Reactor_pattern#/media/File:ReactorPattern_-_UML_2_Sequence_Diagram.svg
+*/
 class Dispatcher
 {
 public:
@@ -17,13 +25,12 @@ public:
 	void createClient(int listenFd);
 	void removeClient(int fd);
 
-	// main loop: builds pollfd array from listeners + connections and dispatches
 	void loop();
 
 private:
 	size_t					  mListenCount;
 	std::vector<pollfd>		  mPollFds;
-	std::map<int, IHandler *> mHandler; // key = fd, value = handler object
+	std::map<int, IHandler *> mHandler;
 };
 
 void signalHandler(int sig);

@@ -102,6 +102,7 @@ bool Dispatcher::setListeners()
 		struct pollfd listenStruct = {(*it).first, POLLIN, 0};
 		mPollFds.push_back(listenStruct);
 	}
+	LOG_INFO("Server ready; listening for requests");
 	return (true);
 }
 

@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <iostream>
 #include <map>
+#include <string>
 
 enum RequestMethod
 {
@@ -50,6 +51,7 @@ private:
 	RequestMethod					   mMethod;
 	std::string						   mRequestUri;
 	std::string						   mHttpVersion;
+	std::string						   mRequestHeader;
 	std::map<std::string, std::string> mHeaderField;
 	bool							   bodyToFile;
 	bool							   parsingFinished;

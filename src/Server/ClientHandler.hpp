@@ -11,6 +11,12 @@
 
 class Dispatcher;
 
+/**
+	\class ClientHandler
+
+	Event handler for a single client connection, acts as a bridge between
+	RequestParser/ResponseBuilder and the client.
+*/
 class ClientHandler: public IHandler
 {
 public:

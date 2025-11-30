@@ -35,7 +35,6 @@ bool ClientHandler::acceptSocket(int listenFd, Dispatcher *dispatch)
 			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
 			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
 			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24) << std::endl;
-	std::cout << "TEST: clientIp: " << ipStream.str() << std::endl;
 
 	mClientIp = ipStream.str();
 	mDispatch = dispatch;
@@ -120,7 +119,7 @@ bool ClientHandler::sendResponse()
 			return (false);
 		mBytesSent += bytes;
 	}
-	// return true if done, false if not yet finished
+	LOG_NOTICE(std::string("response sent, total size: " + numToString(mBytesSent)));
 	return mBytesSent == mResponse.size();
 }
 

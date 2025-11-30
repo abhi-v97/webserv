@@ -27,9 +27,7 @@ Listener::Listener(int port, Dispatcher *dispatch)
 void Listener::handleEvents(pollfd &pollStruct)
 {
 	if (pollStruct.revents & POLLIN)
-	{
 		mDispatch->createClient(mSocket);
-	}
 }
 
 /**
@@ -49,7 +47,6 @@ bool Listener::bindPort()
 		LOG_ERROR(std::string("socket() failed: ") + std::strerror(errno));
 		return (false);
 	}
-	LOG_NOTICE(std::string("Socket created: ") + numToString(mSocket));
 
 	// OS doesn't immediately free the port, which causes web server to hang
 	// if you close and reopen it quickly. This tells our server that we can
