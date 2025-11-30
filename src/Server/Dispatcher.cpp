@@ -1,5 +1,4 @@
 #include <csignal>
-#include <netinet/in.h>
 #include <sys/socket.h>
 
 #include "ClientHandler.hpp"
@@ -7,7 +6,6 @@
 #include "IHandler.hpp"
 #include "Listener.hpp"
 #include "Logger.hpp"
-#include "Utils.hpp"
 
 #define MAX_LISTEN_REQUESTS 8
 
@@ -46,6 +44,20 @@ void Dispatcher::createListener(int port)
 		delete listener;
 }
 
+void Dispatcher::createClient(int listenFd)
+{
+	IHandler *client = new ClientHandler();
+
+	if (static_cast<ClientHandler *>(client)->acceptSocket(listenFd) == false)
+	{
+		delete client;
+		return;
+	}
+	mHandler[client->getFd()] = client;
+	struct pollfd pollFdStruct = {client->getFd(), POLLIN, 0};
+	mPollFds.push_back(pollFdStruct);
+}
+
 bool Dispatcher::setListeners()
 {
 	mListenCount = mHandler.size();
@@ -55,7 +67,8 @@ bool Dispatcher::setListeners()
 		return (false);
 	}
 	mPollFds.reserve(mListenCount);
-	for (std::map<int, IHandler *>::const_iterator it = mHandler.begin(); it != mHandler.end(); it++)
+	for (std::map<int, IHandler *>::const_iterator it = mHandler.begin(); it != mHandler.end();
+		 it++)
 	{
 		if (listen((*it).first, MAX_LISTEN_REQUESTS) < 0)
 		{
@@ -66,41 +79,6 @@ bool Dispatcher::setListeners()
 		mPollFds.push_back(listenStruct);
 	}
 	return (true);
-}
-
-void Dispatcher::addClient(int listenFd)
-{
-	int				   newSocket;
-	struct sockaddr_in clientAddr = {};
-	socklen_t		   clientLen = sizeof(clientAddr);
-
-	newSocket = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
-	if (newSocket < 0)
-	{
-		LOG_ERROR(std::string("accept() failed: ") + std::strerror(errno));
-		return;
-	}
-	LOG_NOTICE(std::string("accepted client with fd: ") + numToString(newSocket));
-
-	// get client IP from sockaddr struct, store it as std::string
-	std::ostringstream clientIp;
-	clientIp << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24) << std::endl;
-
-	std::cout << "TEST: clientIp: " << clientIp.str() << std::endl;
-
-	// update the pollfd struct
-	struct pollfd newClient = {newSocket, POLLIN, 0};
-	mPollFds.push_back(newClient);
-
-	// set the socket to be non-blocking
-	setNonBlockingFlag(newSocket);
-
-	// update clientState with new client
-	// Connection newCon = Connection(newSocket, clientIp.str());
-	// mHandler[newSocket] = newCon;
 }
 
 void Dispatcher::removeClient(int clientFd)

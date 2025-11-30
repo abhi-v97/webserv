@@ -1,18 +1,50 @@
+#include <netinet/in.h>
 #include <sys/socket.h>
 
+#include "CgiHandler.hpp"
 #include "ClientHandler.hpp"
 #include "Logger.hpp"
+#include "ResponseBuilder.hpp"
+#include "Utils.hpp"
 
 ClientHandler::ClientHandler()
+	: mSocketFd(-1), mRequest(), response(), mClientIp(), bytesSent(0), bytesRead(0),
+	  parser(RequestParser()), responseObj(ResponseBuilder()), cgiObj(CgiHandler()),
+	  keepAlive(true), responseReady(false)
 {
+}
+
+bool ClientHandler::acceptSocket(int listenFd)
+{
+	struct sockaddr_in clientAddr = {};
+	socklen_t		   clientLen = sizeof(clientAddr);
+	std::ostringstream ipStream;
+
+	mSocketFd = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
+	if (mSocketFd < 0)
+	{
+		LOG_ERROR(std::string("accept() failed: ") + std::strerror(errno));
+		return (false);
+	}
+	LOG_NOTICE(std::string("accepted client with fd: ") + numToString(mSocketFd));
+
+	// get client IP from sockaddr struct, store it as std::string
+	ipStream << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24) << std::endl;
+	std::cout << "TEST: clientIp: " << ipStream.str() << std::endl;
+
+	mClientIp = ipStream.str();
+	return (setNonBlockingFlag(mSocketFd));
 }
 
 ClientHandler::ClientHandler(int socket, const std::string &ipAddr)
 {
 	bytesRead = 0;
 	bytesSent = 0;
-	mFd = socket;
-	clientIp = ipAddr;
+	mSocketFd = socket;
+	mClientIp = ipAddr;
 	parser = RequestParser();
 	cgiObj = CgiHandler();
 	responseReady = false;
@@ -23,8 +55,8 @@ ClientHandler::ClientHandler(const ClientHandler &obj)
 {
 	bytesRead = obj.bytesRead;
 	bytesSent = obj.bytesSent;
-	mFd = obj.mFd;
-	clientIp = obj.clientIp;
+	mSocketFd = obj.mSocketFd;
+	mClientIp = obj.mClientIp;
 	parser = obj.parser;
 	cgiObj = obj.cgiObj;
 	responseReady = obj.responseReady;
@@ -45,7 +77,7 @@ void ClientHandler::handleEvents(short revents)
 
 int ClientHandler::getFd() const
 {
-	return (this->mFd);
+	return (this->mSocketFd);
 }
 
 void ClientHandler::onReadable()
@@ -57,7 +89,7 @@ void ClientHandler::onReadable()
 	if (parser.getParsingFinished())
 		return;
 
-	bytesRead = recv(mFd, buffer, 4096, 0);
+	bytesRead = recv(mSocketFd, buffer, 4096, 0);
 	if (bytesRead < 0)
 	{
 		LOG_WARNING("recv() failed to read from socket");
@@ -66,7 +98,7 @@ void ClientHandler::onReadable()
 	else if (bytesRead == 0)
 	{
 		LOG_NOTICE(std::string("recv(): zero bytes received, closing connection ") +
-				   numToString(mFd));
+				   numToString(mSocketFd));
 		keepAlive = false;
 		return;
 	}
@@ -79,7 +111,8 @@ bool ClientHandler::onWritable()
 
 	while (bytesSent < response.size())
 	{
-		bytes = send(mFd, response.c_str() + bytesSent, response.size() - bytesSent, MSG_NOSIGNAL);
+		bytes = send(
+			mSocketFd, response.c_str() + bytesSent, response.size() - bytesSent, MSG_NOSIGNAL);
 		if (bytes < 0)
 			return (false);
 		bytesSent += bytes;
@@ -130,7 +163,7 @@ bool ClientHandler::parseRequest()
 
 	if (parser.parse(mRequest) == false)
 	{
-		LOG_ERROR(std::string("invalid request, closing connection ") + numToString(mFd));
+		LOG_ERROR(std::string("invalid request, closing connection ") + numToString(mSocketFd));
 		keepAlive = false;
 		return (false);
 	}

@@ -13,14 +13,15 @@ class ClientHandler: public IHandler
 {
 public:
 	ClientHandler();
+	ClientHandler(int listenFd);
 	ClientHandler(int socket, const std::string &ipAddr);
 	ClientHandler(const ClientHandler &obj);
 	~ClientHandler();
 
-	int				mFd;
+	int				mSocketFd;
 	std::string		mRequest;
 	std::string		response;
-	std::string		clientIp;
+	std::string		mClientIp;
 	ssize_t			bytesSent;
 	ssize_t			bytesRead;
 	RequestParser	parser;
@@ -30,6 +31,8 @@ public:
 	bool			responseReady;
 
 	short events;
+
+	bool acceptSocket(int listenFd);
 
 	void onReadable();	 // read + append to request
 	bool parseRequest(); // parse from request, may produce response

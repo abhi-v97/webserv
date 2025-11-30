@@ -12,10 +12,8 @@ public:
 	Dispatcher();
 	~Dispatcher();
 
-	// keep listeners (front of pollfds) and connections map
 	void addHandler(IHandler *handler);
 	bool setListeners();
-	void addClient(int listenFd); // copy (or add by value)
 	void removeClient(int fd);
 	
 	void createListener(int port);
