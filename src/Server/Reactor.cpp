@@ -3,7 +3,7 @@
 #include <sys/socket.h>
 
 #include "Connection.hpp"
-#include "Logger.hpp"
+#include "../Logger.hpp"
 #include "Reactor.hpp"
 #include "Utils.hpp"
 
@@ -67,6 +67,8 @@ void Reactor::addConnection(int listenFd)
 			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
 			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
 			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24) << std::endl;
+	
+	std::cout << "TEST: clientIp: " << clientIp.str() << std::endl;
 
 	// update the pollfd struct
 	struct pollfd newClient = {newSocket, POLLIN, 0};

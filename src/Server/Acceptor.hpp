@@ -10,13 +10,13 @@ public:
 	Acceptor();
 	~Acceptor();
 
-	bool					init(std::vector<int> ports);
+	bool					initServerPorts(std::vector<int> ports);
 	const std::vector<int> &listeners() const;
 	void					closeAll();
+	void					newConnection(int listenFd);
 
 private:
 	std::vector<int> mListeners;
 
 	bool bindPort(sockaddr_in socketStruct);
-	int createListenSocket(const sockaddr_in &addr);
 };

@@ -6,34 +6,34 @@ CFLAGS = -g -std=c++98 -march=native -fno-limit-debug-info
 
 OBJ_DIR = obj
 SRC_DIR = src
-INC_DIR = inc
 
-# SRC := $(shell find $(SRC_DIR) -type f -name '*.cpp'
-SRC =		src/main.cpp \
-			src/CgiHandler.cpp \
-			src/ResponseBuilder.cpp \
-			src/Logger.cpp \
-			src/configParser.cpp \
-			src/configLexer.cpp \
-			src/RequestParser.cpp \
-			src/Acceptor.cpp \
-			src/Connection.cpp \
-			src/Utils.cpp \
-			src/Reactor.cpp 
+SRC := $(shell find $(SRC_DIR) -type f -name '*.cpp')
+OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC))
 
-OBJS = ${SRC:${SRC_DIR}/%.cpp=${OBJ_DIR}/%.o}
+TMP_SRC_DIRS = ${shell find ${SRC_DIR} -type d}
+OBJ_DIRS = ${subst ${SRC_DIR},${OBJ_DIR},${TMP_SRC_DIRS}}
+
+INC_DIRS := $(TMP_SRC_DIRS)
+INC_FLAGS := $(patsubst %,-I%,$(INC_DIRS))
 
 ${NAME}: ${OBJS}
-	${CC} -I${INC_DIR} ${CFLAGS} ${OBJS} -o $@
+	${CC} ${CFLAGS} ${OBJS} -o $@
 
-${OBJ_DIR}/%.o:${SRC_DIR}/%.cpp
-	mkdir -p obj
-	${CC} ${CFLAGS} -I${INC_DIR} -c $< -o $@
+${OBJ_DIR}/%.o:${SRC_DIR}/%.cpp | ${OBJ_DIRS}
+	${CC} ${CFLAGS} $(INC_FLAGS) -c $< -o $@
+
+${OBJ_DIRS}:
+	mkdir -p $(OBJ_DIRS)
 
 all: ${NAME}
 
 v valgrind: ${NAME}
 	valgrind --leak-check=full --show-leak-kinds=all --track-fds=yes -s ./${NAME}
+
+debug: CFLAGS += -D LOG_LEVEL=0
+debug: clean ${OBJS}
+	rm -f ${OBJS}
+	${NAME} -D LOG_LEVEL=0
 
 clean:
 	rm -f ${OBJS}

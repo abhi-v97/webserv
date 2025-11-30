@@ -19,7 +19,7 @@ int main(int argc, char **argv)
 	srv = parser.servers;
 	for (std::vector<ServerConfig>::iterator it = srv.begin(); it != srv.end(); it++)
 	{
-		acceptor.init((*it).listenPorts);
+		acceptor.initServerPorts((*it).listenPorts);
 	}
 	
 	Reactor reactor;

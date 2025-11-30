@@ -3,9 +3,9 @@
 #include <netinet/in.h>
 
 #include "Acceptor.hpp"
-#include "Utils.hpp"
-
+#include "Connection.hpp"
 #include "Logger.hpp"
+#include "Utils.hpp"
 
 Acceptor::Acceptor()
 {
@@ -15,7 +15,7 @@ Acceptor::~Acceptor()
 {
 }
 
-bool Acceptor::init(std::vector<int> ports)
+bool Acceptor::initServerPorts(std::vector<int> ports)
 {
 	for (std::vector<int>::iterator it = ports.begin(); it != ports.end(); it++)
 	{
@@ -31,16 +31,6 @@ bool Acceptor::init(std::vector<int> ports)
 		}
 	}
 	return (true);
-}
-
-int Acceptor::createListenSocket(const sockaddr_in &addr)
-{
-	return (0);
-}
-
-const std::vector<int> &Acceptor::listeners() const
-{
-	return (this->mListeners);
 }
 
 /**
@@ -81,10 +71,36 @@ bool Acceptor::bindPort(sockaddr_in socketStruct)
 		LOG_ERROR(std::string("bind() failed: ") + std::strerror(errno));
 		return (false);
 	}
-	LOG_NOTICE(std::string("bind success: ") + numToString("127.0.0.1") + std::string(":") +
+	LOG_NOTICE(std::string("bind success: ") + std::string("127.0.0.1: ") +
 			   numToString(ntohs(socketStruct.sin_port)));
 	mListeners.push_back(mSocket);
 	return (true);
+}
+
+void Acceptor::newConnection(int listenFd)
+{
+	int				   newSocket;
+	struct sockaddr_in clientAddr = {};
+	socklen_t		   clientLen = sizeof(clientAddr);
+
+	newSocket = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
+	if (newSocket < 0)
+		LOG_ERROR(std::string("accept() failed: ") + std::strerror(errno));
+	LOG_NOTICE(std::string("accepted client with fd: ") + numToString(newSocket));
+
+	// get client IP from sockaddr struct, store it as std::string
+	std::ostringstream clientIp;
+	clientIp << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24) << std::endl;
+
+	std::cout << "TEST: clientIp: " << clientIp.str() << std::endl;
+}
+
+const std::vector<int> &Acceptor::listeners() const
+{
+	return (this->mListeners);
 }
 
 void Acceptor::closeAll()
