@@ -24,6 +24,7 @@ Dispatcher::~Dispatcher()
 	std::signal(SIGINT, SIG_DFL);
 	for (int i = 0; i < mPollFds.size(); i++)
 	{
+		delete mHandler[mPollFds[i].fd];
 		close(mPollFds[i].fd);
 	}
 }
@@ -109,6 +110,7 @@ bool Dispatcher::setListeners()
 void Dispatcher::removeClient(int clientFd)
 {
 	LOG_NOTICE(std::string("closing connection ") + numToString(mPollFds[clientFd].fd));
+	delete mHandler[mPollFds[clientFd].fd];
 	mHandler.erase(mPollFds[clientFd].fd);
 	mPollFds.erase(mPollFds.begin() + clientFd);
 }
