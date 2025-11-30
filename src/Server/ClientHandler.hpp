@@ -9,37 +9,38 @@
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
 
+class Dispatcher;
+
 class ClientHandler: public IHandler
 {
 public:
 	ClientHandler();
-	ClientHandler(int listenFd);
-	ClientHandler(int socket, const std::string &ipAddr);
-	ClientHandler(const ClientHandler &obj);
 	~ClientHandler();
 
 	int				mSocketFd;
 	std::string		mRequest;
-	std::string		response;
+	std::string		mResponse;
 	std::string		mClientIp;
-	ssize_t			bytesSent;
-	ssize_t			bytesRead;
-	RequestParser	parser;
-	ResponseBuilder responseObj;
-	CgiHandler		cgiObj;
-	bool			keepAlive;
-	bool			responseReady;
+	ssize_t			mBytesSent;
+	ssize_t			mBytesRead;
+	RequestParser	mParser;
+	ResponseBuilder mResponseObj;
+	CgiHandler		mCgiObj;
+	bool			mKeepAlive;
+	bool			mResponseReady;
 
-	short events;
+	Dispatcher *mDispatch;
 
-	bool acceptSocket(int listenFd);
-
-	void onReadable();	 // read + append to request
-	bool parseRequest(); // parse from request, may produce response
-	bool onWritable();	 // send remaining response
-	bool generateResponse();
+	bool acceptSocket(int listenFd, Dispatcher *dispatch);
 	bool getKeepAlive() const;
 
-	void handleEvents(short revents);
+	void handleEvents(struct pollfd &pollStruct);
 	int	 getFd() const;
+
+private:
+	void readSocket();
+	bool parseRequest();
+	bool sendResponse();
+	bool generateResponse();
+	void requestClose();
 };

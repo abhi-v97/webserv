@@ -24,17 +24,12 @@ Listener::Listener(int port, Dispatcher *dispatch)
 	mSocketAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
 }
 
-void Listener::handleEvents(short revents)
+void Listener::handleEvents(pollfd &pollStruct)
 {
-	if (revents & POLLIN)
+	if (pollStruct.revents & POLLIN)
 	{
 		mDispatch->createClient(mSocket);
 	}
-}
-
-int Listener::getFd() const
-{
-	return (this->mSocket);
 }
 
 /**
@@ -79,4 +74,9 @@ bool Listener::bindPort()
 			   numToString(ntohs(mSocketAddress.sin_port)));
 	// mListeners.push_back(mSocket);
 	return (true);
+}
+
+int Listener::getFd() const
+{
+	return (this->mSocket);
 }

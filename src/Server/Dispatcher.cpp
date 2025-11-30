@@ -28,6 +28,27 @@ Dispatcher::~Dispatcher()
 	}
 }
 
+void Dispatcher::loop()
+{
+	std::signal(SIGINT, SIG_IGN);
+	std::signal(SIGINT, signalHandler);
+	while (gSignal == 0)
+	{
+		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), 1);
+		if (pollNum < 0)
+		{
+			LOG_FATAL(std::string("poll() failed: ") + std::strerror(errno));
+		}
+		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
+		{
+			if (mPollFds[i].revents != 0)
+				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i]);
+			if (mHandler[mPollFds[i].fd]->getFd() < 0)
+				removeClient(mPollFds[i].fd);
+		}
+	}
+}
+
 /**
 	\brief factory method to create a listener handler for each port
 
@@ -44,11 +65,14 @@ void Dispatcher::createListener(int port)
 		delete listener;
 }
 
+/**
+	\brief factory method to add a new client to poll loop
+*/
 void Dispatcher::createClient(int listenFd)
 {
 	IHandler *client = new ClientHandler();
 
-	if (static_cast<ClientHandler *>(client)->acceptSocket(listenFd) == false)
+	if (static_cast<ClientHandler *>(client)->acceptSocket(listenFd, this) == false)
 	{
 		delete client;
 		return;
@@ -84,69 +108,8 @@ bool Dispatcher::setListeners()
 void Dispatcher::removeClient(int clientFd)
 {
 	LOG_NOTICE(std::string("closing connection ") + numToString(mPollFds[clientFd].fd));
-	close(mPollFds[clientFd].fd);
 	mHandler.erase(mPollFds[clientFd].fd);
 	mPollFds.erase(mPollFds.begin() + clientFd);
-}
-
-void Dispatcher::loop()
-{
-	std::signal(SIGINT, SIG_IGN);
-	std::signal(SIGINT, signalHandler);
-	while (gSignal == 0)
-	{
-		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), 1);
-		if (pollNum < 0)
-		{
-			LOG_FATAL(std::string("poll() failed: ") + std::strerror(errno));
-		}
-		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
-		{
-			if (mPollFds[i].revents != 0)
-				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i].revents);
-		}
-		// for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
-		// {
-		// 	if (i < mListenCount && (mPollFds[i].revents & POLLIN))
-		// 	{
-		// 		addConnection(mPollFds[i].fd);
-		// 		continue;
-		// 	}
-		// 	else if (i >= mListenCount && mHandler[mPollFds[i].fd].getKeepAlive() == false)
-		// 	{
-		// 		removeConnection(i);
-		// 		continue;
-		// 	}
-		// 	if (mPollFds[i].revents & POLLIN)
-		// 	{
-		// 		mHandler[mPollFds[i].fd].onReadable();
-		// 		if (mHandler[mPollFds[i].fd].parseRequest() == true)
-		// 			mPollFds[i].events |= POLLOUT;
-		// 	}
-		// 	else if (mPollFds[i].revents & POLLOUT)
-		// 	{
-		// 		if (mHandler[mPollFds[i].fd].generateResponse() == true)
-		// 		{
-		// 			// if we have enough data, send reponse to client
-		// 			if (mHandler[mPollFds[i].fd].onWritable() == true)
-		// 			{
-		// 				mHandler[mPollFds[i].fd].responseReady = false;
-		// 				mHandler[mPollFds[i].fd].parseRequest();
-		// 			}
-		// 			// if client requests to keep connection alive
-		// 			// if (mClients[mPollFds[i].fd].keepAlive == false)
-		// 			// 	mClients[mPollFds[i].fd].requestClose();
-		// 			continue;
-		// 		}
-		// 		// if all data has been sent, remove POLLOUT flag
-		// 		mPollFds[i].events &= ~POLLOUT;
-		// 	}
-		// }
-	}
-}
-
-void Dispatcher::handleEvent(int indx)
-{
 }
 
 /**

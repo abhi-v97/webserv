@@ -3,7 +3,6 @@
 
 #include <cerrno>
 #include <cstring>
-#include <iostream>
 #include <sstream>
 
 class ResponseBuilder

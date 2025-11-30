@@ -1,0 +1,7 @@
+2025-11-30 19:42:11 [notice] : Socket created: 3
+2025-11-30 19:42:11 [notice] : bind success: 127.0.0.1: 8080
+2025-11-30 19:42:11 [notice] : Socket created: 5
+2025-11-30 19:42:11 [notice] : bind success: 127.0.0.1: 9090
+2025-11-30 19:42:11 [notice] : Socket created: 6
+2025-11-30 19:42:11 [notice] : bind success: 127.0.0.1: 8000
+2025-11-30 19:42:27 [notice] : accepted client with fd: 7

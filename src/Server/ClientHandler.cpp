@@ -1,20 +1,22 @@
 #include <netinet/in.h>
+#include <sys/poll.h>
 #include <sys/socket.h>
 
 #include "CgiHandler.hpp"
 #include "ClientHandler.hpp"
+#include "Dispatcher.hpp"
 #include "Logger.hpp"
 #include "ResponseBuilder.hpp"
 #include "Utils.hpp"
 
 ClientHandler::ClientHandler()
-	: mSocketFd(-1), mRequest(), response(), mClientIp(), bytesSent(0), bytesRead(0),
-	  parser(RequestParser()), responseObj(ResponseBuilder()), cgiObj(CgiHandler()),
-	  keepAlive(true), responseReady(false)
+	: mSocketFd(-1), mRequest(), mResponse(), mClientIp(), mBytesSent(0), mBytesRead(0),
+	  mParser(RequestParser()), mResponseObj(ResponseBuilder()), mCgiObj(CgiHandler()),
+	  mKeepAlive(true), mResponseReady(false)
 {
 }
 
-bool ClientHandler::acceptSocket(int listenFd)
+bool ClientHandler::acceptSocket(int listenFd, Dispatcher *dispatch)
 {
 	struct sockaddr_in clientAddr = {};
 	socklen_t		   clientLen = sizeof(clientAddr);
@@ -36,57 +38,44 @@ bool ClientHandler::acceptSocket(int listenFd)
 	std::cout << "TEST: clientIp: " << ipStream.str() << std::endl;
 
 	mClientIp = ipStream.str();
+	mDispatch = dispatch;
 	return (setNonBlockingFlag(mSocketFd));
-}
-
-ClientHandler::ClientHandler(int socket, const std::string &ipAddr)
-{
-	bytesRead = 0;
-	bytesSent = 0;
-	mSocketFd = socket;
-	mClientIp = ipAddr;
-	parser = RequestParser();
-	cgiObj = CgiHandler();
-	responseReady = false;
-	keepAlive = true;
-}
-
-ClientHandler::ClientHandler(const ClientHandler &obj)
-{
-	bytesRead = obj.bytesRead;
-	bytesSent = obj.bytesSent;
-	mSocketFd = obj.mSocketFd;
-	mClientIp = obj.mClientIp;
-	parser = obj.parser;
-	cgiObj = obj.cgiObj;
-	responseReady = obj.responseReady;
-	keepAlive = obj.keepAlive;
 }
 
 ClientHandler::~ClientHandler()
 {
 }
 
-void ClientHandler::handleEvents(short revents)
+void ClientHandler::handleEvents(pollfd &pollStruct)
 {
-	if (revents & POLLIN)
-		;
-	else if (revents & POLLOUT)
-		;
+	if (pollStruct.revents & POLLIN)
+	{
+		this->readSocket();
+		if (this->parseRequest() == true)
+			pollStruct.events |= POLLOUT;
+	}
+	else if (pollStruct.revents & POLLOUT)
+	{
+		if (this->generateResponse() == true)
+		{
+			if (this->sendResponse() == true)
+			{
+				mResponseReady = false;
+				parseRequest();
+			}
+			return;
+		}
+		pollStruct.events &= ~POLLOUT;
+	}
 }
 
-int ClientHandler::getFd() const
-{
-	return (this->mSocketFd);
-}
-
-void ClientHandler::onReadable()
+void ClientHandler::readSocket()
 {
 	char	buffer[4096];
 	ssize_t bytesRead;
 
 	// don't read next data until you are finished with all requests from the previous read
-	if (parser.getParsingFinished())
+	if (mParser.getParsingFinished())
 		return;
 
 	bytesRead = recv(mSocketFd, buffer, 4096, 0);
@@ -99,61 +88,10 @@ void ClientHandler::onReadable()
 	{
 		LOG_NOTICE(std::string("recv(): zero bytes received, closing connection ") +
 				   numToString(mSocketFd));
-		keepAlive = false;
+		mKeepAlive = false;
 		return;
 	}
 	mRequest.append(buffer, bytesRead);
-}
-
-bool ClientHandler::onWritable()
-{
-	ssize_t bytes = 0;
-
-	while (bytesSent < response.size())
-	{
-		bytes = send(
-			mSocketFd, response.c_str() + bytesSent, response.size() - bytesSent, MSG_NOSIGNAL);
-		if (bytes < 0)
-			return (false);
-		bytesSent += bytes;
-	}
-	// return true if done, false if not yet finished
-	return bytesSent == response.size();
-	return (true);
-}
-
-bool ClientHandler::generateResponse()
-{
-	ssize_t bytes = 0;
-	int		isCGI = 0;
-
-	if (responseReady == true)
-		return (true);
-	if (parser.getParsingFinished() == false)
-		return (false);
-	responseReady = false;
-	if (isCGI)
-	{
-		// TODO: change this to accept other CGI requests
-		cgiObj.execute("hello.py");
-
-		int outfd = cgiObj.getOutFd();
-		if (responseObj.readCgiResponse(outfd))
-		{
-			events |= POLLOUT;
-		}
-		response = responseObj.getResponse();
-	}
-	else
-	{
-		response = responseObj.buildResponse();
-	}
-	keepAlive = parser.keepAlive();
-	parser.reset();
-	responseReady = true;
-	bytesSent = 0;
-	return (true);
-	return (true);
 }
 
 bool ClientHandler::parseRequest()
@@ -161,16 +99,74 @@ bool ClientHandler::parseRequest()
 	if (mRequest.empty())
 		return (false);
 
-	if (parser.parse(mRequest) == false)
+	if (mParser.parse(mRequest) == false)
 	{
 		LOG_ERROR(std::string("invalid request, closing connection ") + numToString(mSocketFd));
-		keepAlive = false;
+		mKeepAlive = false;
 		return (false);
 	}
-	return (parser.getParsingFinished());
+	return (mParser.getParsingFinished());
+}
+
+bool ClientHandler::sendResponse()
+{
+	ssize_t bytes = 0;
+
+	while (mBytesSent < mResponse.size())
+	{
+		bytes = send(
+			mSocketFd, mResponse.c_str() + mBytesSent, mResponse.size() - mBytesSent, MSG_NOSIGNAL);
+		if (bytes < 0)
+			return (false);
+		mBytesSent += bytes;
+	}
+	// return true if done, false if not yet finished
+	return mBytesSent == mResponse.size();
+}
+
+bool ClientHandler::generateResponse()
+{
+	ssize_t bytes = 0;
+	int		isCGI = 0;
+
+	if (mResponseReady == true)
+		return (true);
+	if (mParser.getParsingFinished() == false)
+		return (false);
+	mResponseReady = false;
+	if (isCGI)
+	{
+		// TODO: change this to accept other CGI requests
+		mCgiObj.execute("hello.py");
+
+		int outfd = mCgiObj.getOutFd();
+		mResponseObj.readCgiResponse(outfd);
+		mResponse = mResponseObj.getResponse();
+	}
+	else
+	{
+		mResponse = mResponseObj.buildResponse();
+	}
+	mKeepAlive = mParser.keepAlive();
+	mParser.reset();
+	mResponseReady = true;
+	mBytesSent = 0;
+	return (true);
+	return (true);
 }
 
 bool ClientHandler::getKeepAlive() const
 {
-	return (this->keepAlive);
+	return (this->mKeepAlive);
+}
+
+int ClientHandler::getFd() const
+{
+	return (this->mSocketFd);
+}
+
+void ClientHandler::requestClose()
+{
+	close(mSocketFd);
+	mSocketFd = -1;
 }

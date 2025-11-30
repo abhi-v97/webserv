@@ -17,7 +17,7 @@ public:
 	// bool					initServerPorts(std::vector<int> ports);
 	const std::vector<int> &listeners() const;
 	void					newConnection();
-	void					handleEvents(short revents);
+	void					handleEvents(struct pollfd &pollStruct);
 	int						getFd() const;
 	bool					bindPort();
 
