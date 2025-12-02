@@ -11,8 +11,8 @@
 
 ClientHandler::ClientHandler()
 	: mSocketFd(-1), mRequest(), mResponse(), mClientIp(), mBytesSent(0), mBytesRead(0),
-	  mParser(RequestParser()), mResponseObj(ResponseBuilder()), mCgiObj(CgiHandler()),
-	  mKeepAlive(true), mResponseReady(false)
+	  mParser(RequestParser()), mResponseObj(ResponseBuilder()), mCgiObj(), mKeepAlive(true),
+	  mResponseReady(false), mIsCgi(false)
 {
 }
 
@@ -111,6 +111,8 @@ bool ClientHandler::sendResponse()
 {
 	ssize_t bytes = 0;
 
+	if (mIsCgi == true && mIsCgiDone == false)
+		return (false);
 	while (mBytesSent < mResponse.size())
 	{
 		bytes = send(
@@ -126,21 +128,21 @@ bool ClientHandler::sendResponse()
 bool ClientHandler::generateResponse()
 {
 	ssize_t bytes = 0;
-	int		isCGI = 0;
 
+	mIsCgi = true;
 	if (mResponseReady == true)
 		return (true);
 	if (mParser.getParsingFinished() == false)
 		return (false);
 	mResponseReady = false;
-	if (isCGI)
+	if (mIsCgi)
 	{
-		// TODO: change this to accept other CGI requests
-		mCgiObj.execute("hello.py");
+		mDispatch->createCgiHandler(this);
 
-		int outfd = mCgiObj.getOutFd();
-		mResponseObj.readCgiResponse(outfd);
-		mResponse = mResponseObj.getResponse();
+		// mCgiObj.execute("hello.py");
+		// int outfd = mCgiObj.getFd();
+		// mResponseObj.readCgiResponse(outfd);
+		// mResponse = mResponseObj.getResponse();
 	}
 	else
 	{
@@ -151,7 +153,11 @@ bool ClientHandler::generateResponse()
 	mResponseReady = true;
 	mBytesSent = 0;
 	return (true);
-	return (true);
+}
+
+std::string &ClientHandler::getResponse()
+{
+	return (this->mResponse);
 }
 
 bool ClientHandler::getKeepAlive() const
@@ -162,6 +168,16 @@ bool ClientHandler::getKeepAlive() const
 int ClientHandler::getFd() const
 {
 	return (this->mSocketFd);
+}
+
+void ClientHandler::setCgiReady(bool status)
+{
+	this->mIsCgiDone = status;
+}
+
+void ClientHandler::setCgiFd(int pipeFd)
+{
+	this->mPipeFd = pipeFd;
 }
 
 void ClientHandler::requestClose()
