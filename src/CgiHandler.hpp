@@ -1,10 +1,16 @@
 #ifndef CGIHANDLER_HPP
 #define CGIHANDLER_HPP
 
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <sched.h>
+#include <sstream>
 #include <string>
+
+#include "IHandler.hpp"
+
+class ClientHandler;
 
 enum CgiType
 {
@@ -13,23 +19,26 @@ enum CgiType
 	SHELL,
 };
 
-class CgiHandler
+class CgiHandler: public IHandler
 {
 public:
-	CgiHandler();
+	CgiHandler(ClientHandler *client);
 	CgiHandler(const CgiHandler &src);
 	~CgiHandler();
 
-	void execute(std::string cgiName);
-
-	int	 getOutFd();
+	bool execute(std::string cgiName);
 	void setCgiType(CgiType type);
+	void setCgiResponse();
+	int	 getFd() const;
+	void handleEvents(struct pollfd &pollStruct);
 
 private:
 	std::map<std::string, std::string> m_header;
 	pid_t							   m_PID;
 	int								   m_fd[2];
 	CgiType							   mType;
+	ClientHandler					  *mClient;
+	std::stringstream				   mResponse;
 
 	void buildArgs();
 };

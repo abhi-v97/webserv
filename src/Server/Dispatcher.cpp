@@ -1,6 +1,7 @@
 #include <csignal>
 #include <sys/socket.h>
 
+#include "CgiHandler.hpp"
 #include "ClientHandler.hpp"
 #include "Dispatcher.hpp"
 #include "IHandler.hpp"
@@ -80,6 +81,23 @@ void Dispatcher::createClient(int listenFd)
 	}
 	mHandler[client->getFd()] = client;
 	struct pollfd pollFdStruct = {client->getFd(), POLLIN, 0};
+	mPollFds.push_back(pollFdStruct);
+}
+
+void Dispatcher::createCgiHandler(ClientHandler *client)
+{
+	IHandler *cgi = new CgiHandler(client);
+
+	if (static_cast<CgiHandler *>(cgi)->execute("hello.py") == false)
+	{
+		delete cgi;
+		return;
+	}
+	int cgiFd = cgi->getFd();
+
+	mHandler[cgiFd] = cgi;
+	struct pollfd pollFdStruct = {cgiFd, POLLIN, 0};
+	client->setCgiFd(cgiFd);
 	mPollFds.push_back(pollFdStruct);
 }
 
