@@ -4,13 +4,16 @@
 #include <unistd.h>
 
 #include "CgiHandler.hpp"
-#include "WebServer.hpp"
+#include "ClientHandler.hpp"
+#include "Dispatcher.hpp"
+
+#define BUFFER_SIZE 4096
 
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-CgiHandler::CgiHandler(): m_PID(0), m_fd()
+CgiHandler::CgiHandler(ClientHandler *client): m_PID(0), m_fd(), mClient(client)
 {
 }
 
@@ -56,15 +59,13 @@ std::ostream &operator<<(std::ostream &outf, const CgiHandler &obj)
 // simply calls python3 on the provided filename
 // NEXT: fix up pipes and redirect, you're not resetting stdout after
 // duping, this will not work for multiple clients
-void CgiHandler::execute(std::string cgiName)
+bool CgiHandler::execute(std::string cgiName)
 {
 	std::string cgiFile = ("cgi-bin/" + cgiName);
 	// char *cwd = getcwd(NULL, 0);
 
 	if (pipe(this->m_fd) < 0)
-	{
-		return;
-	}
+		return (false);
 
 	this->m_PID = fork();
 
@@ -85,6 +86,7 @@ void CgiHandler::execute(std::string cgiName)
 		argv[2] = NULL;
 		std::cerr << "starting execve" << std::endl;
 		execve(argv[0], argv, NULL);
+		std::exit(127);
 	}
 	else
 	{
@@ -102,13 +104,38 @@ void CgiHandler::execute(std::string cgiName)
 		close(this->m_fd[1]);
 		// close(this->m_fd[0]);
 	}
+	return (true);
+}
+
+void CgiHandler::handleEvents(struct pollfd &pollStruct)
+{
+	char buffer[BUFFER_SIZE];
+	memset(buffer, 0, BUFFER_SIZE);
+
+	ssize_t len = read(m_fd[0], buffer, BUFFER_SIZE);
+
+	// returns true if len isn't positive, meaning read is finished
+	if (len <= 0)
+	{
+		mClient->setCgiReady(true);
+		setCgiResponse();
+		return;
+	}
+	mResponse << buffer;
+}
+
+void CgiHandler::setCgiResponse()
+{
+	std::string &clientResponse = mClient->getResponse();
+
+	clientResponse.append("HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: ");
 }
 
 /*
 ** --------------------------------- ACCESSOR ---------------------------------
 */
 
-int CgiHandler::getOutFd()
+int CgiHandler::getFd() const
 {
 	return this->m_fd[0];
 }
