@@ -45,8 +45,10 @@ void Dispatcher::loop()
 		{
 			if (mPollFds[i].revents != 0)
 				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i]);
-			if (mHandler[mPollFds[i].fd]->getFd() < 0)
-				removeClient(mPollFds[i].fd);
+			if (mHandler[mPollFds[i].fd]->getKeepAlive() == false)
+			{
+				removeClient(i);
+			}
 		}
 	}
 }

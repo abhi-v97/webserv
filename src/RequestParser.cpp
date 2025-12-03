@@ -1,13 +1,13 @@
+#include <algorithm>
 #include <cctype>
 #include <fcntl.h>
-#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <unistd.h>
 
-#include "RequestParser.hpp"
 #include "Logger.hpp"
+#include "RequestParser.hpp"
 #include "Utils.hpp"
 
 RequestParser::RequestParser()
@@ -22,7 +22,7 @@ RequestParser::~RequestParser()
 
 bool RequestParser::parse(std::string &requestBuffer)
 {
-	std::string		  buffer;
+	std::string buffer;
 
 	const size_t bufSize = requestBuffer.size();
 
@@ -179,7 +179,7 @@ bool RequestParser::parseBody(std::string &request)
 		available = request.size() - (bodyStart + bodyReceived);
 	if (available)
 	{
-		size_t toWrite = std::min(available, bodyExpected - bodyReceived);
+		size_t	toWrite = std::min(available, bodyExpected - bodyReceived);
 		ssize_t bytesWritten = write(bodyFd, request.data() + bodyStart + bodyReceived, toWrite);
 		if (bytesWritten < 0)
 			return (false);
@@ -216,19 +216,18 @@ bool RequestParser::validateUri(const std::string &uri)
 
 // TODO: optional: http1.1 also supports a keep-alive header field, where client
 // can specify how many further requests to accept before closing
-int RequestParser::keepAlive()
+// Returns false if HTTP version is 1.0 as it did not support persistent connections
+// Also returns false if client requested connection to be closed
+bool RequestParser::getKeepAliveRequest()
 {
 	if (*(mHttpVersion.rbegin()) == '0')
-		return (0);
+		return (false);
 	if (mHeaderField.find("connection") != mHeaderField.end())
 	{
-		if (mHeaderField["connection"] == "keep-alive")
-		{
-			mHeaderField.erase("connection");
-			return 1;
-		}
+		if (mHeaderField["connection"] == "close")
+			return (false);
 	}
-	return 0;
+	return (true);
 }
 
 void RequestParser::reset()
