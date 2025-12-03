@@ -24,6 +24,7 @@ Listener::Listener(int port, Dispatcher *dispatch)
 	mSocketAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
 }
 
+// TODO: handle requestClose for listener events
 void Listener::handleEvents(pollfd &pollStruct)
 {
 	if (pollStruct.revents & POLLIN)
@@ -76,4 +77,9 @@ bool Listener::bindPort()
 int Listener::getFd() const
 {
 	return (this->mSocket);
+}
+
+bool Listener::getKeepAlive() const
+{
+	return (this->mKeepAlive);
 }

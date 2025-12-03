@@ -140,4 +140,14 @@ int CgiHandler::getFd() const
 	return this->m_fd[0];
 }
 
+void CgiHandler::setCgiType(CgiType type)
+{
+	this->mType = type;
+}
+
+bool CgiHandler::getKeepAlive() const
+{
+	return (this->mKeepAlive);
+}
+
 /* ************************************************************************** */

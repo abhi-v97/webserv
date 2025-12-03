@@ -33,7 +33,7 @@ public:
 	std::string						   &getUri();
 	size_t								getContentLength();
 	bool								getParsingFinished() const;
-	int									keepAlive();
+	bool								getKeepAliveRequest();
 
 	void setHeaderEnd(const size_t &headerEnd);
 
