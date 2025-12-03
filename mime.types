@@ -1,0 +1,8 @@
+# This is a comment
+
+html:text/html
+pdf:application/pdf
+mp3:audio/mpeg
+jpg:image/jpeg
+jpeg:image/jpeg
+png:image/png
