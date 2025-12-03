@@ -11,8 +11,8 @@
 
 ClientHandler::ClientHandler()
 	: mSocketFd(-1), mRequest(), mResponse(), mClientIp(), mBytesSent(0), mBytesRead(0),
-	  mParser(RequestParser()), mResponseObj(ResponseBuilder()), mCgiObj(), mKeepAlive(true),
-	  mResponseReady(false), mIsCgi(false)
+	  mParser(RequestParser()), mResponseObj(ResponseBuilder()), mCgiObj(), mResponseReady(false),
+	  mIsCgi(false), mIsCgiDone(false)
 {
 }
 
@@ -51,7 +51,10 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 	{
 		this->readSocket();
 		if (this->parseRequest() == true)
+		{
 			pollStruct.events |= POLLOUT;
+			generateResponse();
+		}
 	}
 	else if (pollStruct.revents & POLLOUT)
 	{
@@ -138,11 +141,6 @@ bool ClientHandler::generateResponse()
 	if (mIsCgi)
 	{
 		mDispatch->createCgiHandler(this);
-
-		// mCgiObj.execute("hello.py");
-		// int outfd = mCgiObj.getFd();
-		// mResponseObj.readCgiResponse(outfd);
-		// mResponse = mResponseObj.getResponse();
 	}
 	else
 	{
@@ -178,10 +176,4 @@ void ClientHandler::setCgiReady(bool status)
 void ClientHandler::setCgiFd(int pipeFd)
 {
 	this->mPipeFd = pipeFd;
-}
-
-void ClientHandler::requestClose()
-{
-	close(mSocketFd);
-	mSocketFd = -1;
 }

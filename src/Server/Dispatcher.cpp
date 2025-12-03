@@ -127,12 +127,14 @@ bool Dispatcher::setListeners()
 	return (true);
 }
 
-void Dispatcher::removeClient(int clientFd)
+void Dispatcher::removeClient(int pollNum)
 {
-	LOG_NOTICE(std::string("closing connection ") + numToString(mPollFds[clientFd].fd));
-	delete mHandler[mPollFds[clientFd].fd];
-	mHandler.erase(mPollFds[clientFd].fd);
-	mPollFds.erase(mPollFds.begin() + clientFd);
+	int clientFd = mPollFds[pollNum].fd;
+
+	LOG_NOTICE(std::string("closing connection ") + numToString(clientFd));
+	delete mHandler[clientFd];
+	mHandler.erase(clientFd);
+	mPollFds.erase(mPollFds.begin() + pollNum);
 }
 
 /**
