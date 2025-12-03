@@ -13,7 +13,8 @@
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-CgiHandler::CgiHandler(ClientHandler *client): m_PID(0), m_fd(), mClient(client)
+CgiHandler::CgiHandler(ClientHandler *client)
+	: m_PID(0), m_fd(), mClient(client), mCgiBody(), mBodySize(0)
 {
 }
 
@@ -98,14 +99,22 @@ void CgiHandler::handleEvents(struct pollfd &pollStruct)
 		setCgiResponse();
 		return;
 	}
-	mResponse << buffer;
+	mCgiBody.append(buffer, BUFFER_SIZE);
+	mBodySize += len;
 }
 
 void CgiHandler::setCgiResponse()
 {
-	std::string &clientResponse = mClient->getResponse();
+	std::ostringstream finalResponse;
+	std::string		  &clientResponse = mClient->getResponse();
 
-	clientResponse.append("HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: ");
+	finalResponse << "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: " << mBodySize
+				  << "\r\n\r\n"
+				  << mCgiBody;
+	clientResponse = finalResponse.str();
+	close(m_fd[0]);
+	m_fd[0] = -1;
+	mKeepAlive = false;
 }
 
 void CgiHandler::buildArgs()
