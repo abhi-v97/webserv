@@ -5,8 +5,8 @@
 #include <iostream>
 #include <map>
 #include <sched.h>
-#include <sstream>
 #include <string>
+#include <unistd.h>
 
 #include "IHandler.hpp"
 
@@ -39,7 +39,8 @@ private:
 	int								   m_fd[2];
 	CgiType							   mType;
 	ClientHandler					  *mClient;
-	std::stringstream				   mResponse;
+	std::string						   mCgiBody;
+	ssize_t							   mBodySize;
 
 	void buildArgs();
 };
