@@ -148,7 +148,7 @@ bool ClientHandler::generateResponse()
 	{
 		mResponse = mResponseObj.buildResponse();
 	}
-	mKeepAlive = mParser.keepAlive();
+	mKeepAlive = mParser.getKeepAliveRequest();
 	mParser.reset();
 	mResponseReady = true;
 	mBytesSent = 0;

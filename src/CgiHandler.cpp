@@ -126,4 +126,9 @@ void CgiHandler::setCgiType(CgiType type)
 	this->mType = type;
 }
 
+bool CgiHandler::getKeepAlive() const
+{
+	return (this->mKeepAlive);
+}
+
 /* ************************************************************************** */

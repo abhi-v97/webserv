@@ -31,6 +31,7 @@ public:
 	void setCgiResponse();
 	int	 getFd() const;
 	void handleEvents(struct pollfd &pollStruct);
+	bool getKeepAlive() const;
 
 private:
 	std::map<std::string, std::string> m_header;

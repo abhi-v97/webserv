@@ -32,7 +32,6 @@ public:
 	RequestParser	mParser;
 	ResponseBuilder mResponseObj;
 	CgiHandler	   *mCgiObj;
-	bool			mKeepAlive;
 	bool			mResponseReady;
 	bool			mIsCgi;
 	bool			mIsCgiDone;
@@ -53,5 +52,4 @@ private:
 	bool parseRequest();
 	bool sendResponse();
 	bool generateResponse();
-	void requestClose();
 };
