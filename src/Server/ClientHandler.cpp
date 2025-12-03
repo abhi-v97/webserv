@@ -128,6 +128,7 @@ bool ClientHandler::generateResponse()
 	ssize_t bytes = 0;
 	int		isCGI = 0;
 
+	mIsCgi = false;
 	if (mResponseReady == true)
 		return (true);
 	if (mParser.getParsingFinished() == false)
@@ -144,7 +145,7 @@ bool ClientHandler::generateResponse()
 	}
 	else
 	{
-		mResponse = mResponseObj.buildResponse();
+		mResponse = mResponseObj.buildResponse(mParser.getUri());
 	}
 	mKeepAlive = mParser.keepAlive();
 	mParser.reset();

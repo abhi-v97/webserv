@@ -16,8 +16,8 @@ public:
 
 	void reset();
 
-	std::string buildResponse();
-	bool readCgiResponse(int pipeOutFd);
+	std::string buildResponse(const std::string &uri);
+	bool		readCgiResponse(int pipeOutFd);
 
 	std::string getResponse();
 
@@ -25,5 +25,5 @@ private:
 	std::stringstream mResponse;
 };
 
-#endif /* ************************************************* RESPONSEBUILDER_H  \
-        */
+#endif /* ************************************************* RESPONSEBUILDER_H                      \
+		*/

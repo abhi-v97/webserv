@@ -1,5 +1,6 @@
 #include "Dispatcher.hpp"
 #include "Logger.hpp"
+#include "MimeTypes.hpp"
 #include "configParser.hpp"
 
 int main(int argc, char **argv)
@@ -10,7 +11,6 @@ int main(int argc, char **argv)
 		configFile = "default.conf";
 	else
 		configFile = std::string(argv[1]);
-
 	configParser			  parser(configFile);
 	Dispatcher				  dispatch;
 	std::vector<ServerConfig> srv;
@@ -26,8 +26,15 @@ int main(int argc, char **argv)
 	if (dispatch.setListeners() == false)
 		return (1);
 
+	// load supported types
+	MimeTypes::getInstance()->loadFromFile("mime.types");
+
 	dispatch.loop();
 
 	Logger::deleteLogger();
+
+	// std::cout << "Test: " << MimeTypes::getInstance()->getType("/www/html/mp3.pdf") << std::endl;
+	// std::cout << "Test: " << MimeTypes::getInstance()->getType("mp3.mp3") << std::endl;
+	// std::cout << "Test: " << MimeTypes::getInstance()->getType("bogus") << std::endl;
 	return (0);
 }

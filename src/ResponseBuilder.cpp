@@ -1,8 +1,9 @@
 #include <cerrno>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <unistd.h>
 
+#include "MimeTypes.hpp"
 #include "ResponseBuilder.hpp"
 
 #define BUFFER_SIZE 4096
@@ -50,17 +51,23 @@ void ResponseBuilder::reset()
 	mResponse.clear();
 }
 
-// simple code that grabs everything in a html file and appends it as "body" to
-// a stanard header line
-std::string ResponseBuilder::buildResponse()
+// simple response to a GET request
+// grabs the file pointed to by uri and passes it along in its entirety
+// now supports the content-type attribute, provided a matching extension exists in mime.types file
+// if not, the file is treated as a plain text file
+std::string ResponseBuilder::buildResponse(const std::string &uri)
 {
-	std::ifstream	   htmlFile("test.html");
+	std::string file = "www";
+
+	file.append(uri);
+
+	std::ifstream	   requestFile(file.c_str());
 	std::ostringstream response;
 	std::ostringstream body;
 
-	body << htmlFile.rdbuf();
-	response << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " << body.str().size()
-			 << "\n\n"
+	body << requestFile.rdbuf();
+	response << "HTTP/1.1 200 OK\r\nContent-Type: " << MimeTypes::getInstance()->getType(uri)
+			 << "\r\nContent-Length: " << body.str().size() << "\r\n\r\n"
 			 << body.str();
 	return response.str();
 }
@@ -79,7 +86,6 @@ bool ResponseBuilder::readCgiResponse(int pipeOutFd)
 		len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	}
 	mResponse << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " << body.str().size()
-			  << "\n\n"
 			  << body.str();
 	std::cout << mResponse.str() << std::endl;
 
