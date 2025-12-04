@@ -67,9 +67,8 @@ bool Listener::bindPort()
 		LOG_ERROR(std::string("bind() failed: ") + std::strerror(errno));
 		return (false);
 	}
-	LOG_NOTICE(std::string("bind success: ") + std::string("127.0.0.1: ") +
+	LOG_NOTICE(std::string("bind(): ") + std::string("127.0.0.1:") +
 			   numToString(ntohs(mSocketAddress.sin_port)));
-	// mListeners.push_back(mSocket);
 	return (true);
 }
 
@@ -77,3 +76,9 @@ int Listener::getFd() const
 {
 	return (this->mSocket);
 }
+
+bool Listener::getKeepAlive() const
+{
+	return (this->mKeepAlive);
+}
+

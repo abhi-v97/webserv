@@ -31,10 +31,7 @@ int main(int argc, char **argv)
 
 	dispatch.loop();
 
-	Logger::deleteLogger();
-
-	// std::cout << "Test: " << MimeTypes::getInstance()->getType("/www/html/mp3.pdf") << std::endl;
-	// std::cout << "Test: " << MimeTypes::getInstance()->getType("mp3.mp3") << std::endl;
-	// std::cout << "Test: " << MimeTypes::getInstance()->getType("bogus") << std::endl;
+	Logger::deleteInstance();
+	MimeTypes::deleteInstance();
 	return (0);
 }

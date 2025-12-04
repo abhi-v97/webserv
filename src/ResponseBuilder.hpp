@@ -5,21 +5,24 @@
 #include <cstring>
 #include <sstream>
 
+class RequestParser;
+
 class ResponseBuilder
 {
 public:
 	ResponseBuilder();
-	ResponseBuilder(const ResponseBuilder &src);
 	~ResponseBuilder();
-
-	ResponseBuilder &operator=(const ResponseBuilder &rhs);
 
 	void reset();
 
 	std::string buildResponse(const std::string &uri);
 	bool		readCgiResponse(int pipeOutFd);
+	void		parseRangeHeader(RequestParser &parser);
 
 	std::string getResponse();
+	size_t		mMin;
+	size_t		mMax;
+	size_t		mStatus;
 
 private:
 	std::stringstream mResponse;
