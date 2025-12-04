@@ -68,7 +68,6 @@ std::string &MimeTypes::getType(const std::string &filename)
 {
 	size_t dot = filename.rfind('.');
 
-	std::cout << "IAM:" << this << std::endl;
 	if (dot == std::string::npos)
 		return (mSupportedTypes["txt"]);
 

@@ -11,8 +11,8 @@
 
 ClientHandler::ClientHandler()
 	: mSocketFd(-1), mRequest(), mResponse(), mClientIp(), mBytesSent(0), mBytesRead(0),
-	  mParser(RequestParser()), mResponseObj(ResponseBuilder()), mCgiObj(), mResponseReady(false),
-	  mIsCgi(false), mIsCgiDone(false)
+	  mParser(RequestParser()), mResponseObj(), mCgiObj(), mResponseReady(false), mIsCgi(false),
+	  mIsCgiDone(false)
 {
 }
 
@@ -116,15 +116,14 @@ bool ClientHandler::sendResponse()
 
 	if (mIsCgi == true && mIsCgiDone == false)
 		return (false);
-	while (mBytesSent < mResponse.size())
-	{
-		bytes = send(
-			mSocketFd, mResponse.c_str() + mBytesSent, mResponse.size() - mBytesSent, MSG_NOSIGNAL);
-		if (bytes < 0)
-			return (false);
+	bytes = send(
+		mSocketFd, mResponse.c_str() + mBytesSent, mResponse.size() - mBytesSent, MSG_NOSIGNAL);
+	if (bytes > 0)
 		mBytesSent += bytes;
-	}
-	LOG_NOTICE(std::string("response sent, total size: " + numToString(mBytesSent)));
+	else
+		return (true);
+	LOG_NOTICE(std::string("response status: " + numToString(mResponseObj.mStatus) +
+						   ", total size: " + numToString(mBytesSent)));
 	return mBytesSent == mResponse.size();
 }
 
@@ -144,6 +143,7 @@ bool ClientHandler::generateResponse()
 	}
 	else
 	{
+		mResponseObj.parseRangeHeader(mParser);
 		mResponse = mResponseObj.buildResponse(mParser.getUri());
 	}
 	mKeepAlive = mParser.getKeepAliveRequest();
