@@ -7,7 +7,6 @@
 
 #define BUF_SIZE 50
 
-
 // static member init
 Logger *Logger::mLogger = NULL;
 
@@ -31,7 +30,7 @@ Logger::Logger()
 ** -------------------------------- DESTRUCTOR --------------------------------
 */
 
-void Logger::deleteLogger()
+void Logger::deleteInstance()
 {
 	if (Logger::mLogger)
 	{

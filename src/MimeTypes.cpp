@@ -27,7 +27,7 @@ MimeTypes *MimeTypes::getInstance()
 /**
  * Use to free the singleton instance when shutting down the server
  */
-void MimeTypes::deleteLogger()
+void MimeTypes::deleteInstance()
 {
 	if (MimeTypes::mInstance)
 	{

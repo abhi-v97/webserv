@@ -28,7 +28,7 @@ bool ClientHandler::acceptSocket(int listenFd, Dispatcher *dispatch)
 		LOG_ERROR(std::string("accept() failed: ") + std::strerror(errno));
 		return (false);
 	}
-	LOG_NOTICE(std::string("accepted client with fd: ") + numToString(mSocketFd));
+	LOG_INFO(std::string("accept(): new client fd: ") + numToString(mSocketFd));
 
 	// get client IP from sockaddr struct, store it as std::string
 	ipStream << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
@@ -83,13 +83,14 @@ void ClientHandler::readSocket()
 	bytesRead = recv(mSocketFd, buffer, 4096, 0);
 	if (bytesRead < 0)
 	{
-		LOG_WARNING("recv() failed to read from socket");
+		LOG_WARNING(std::string("recv(): client " + numToString(mSocketFd)) +
+					": failed to read from socket");
 		return;
 	}
 	else if (bytesRead == 0)
 	{
-		LOG_NOTICE(std::string("recv(): zero bytes received, closing connection ") +
-				   numToString(mSocketFd));
+		LOG_NOTICE(std::string("recv(): client " + numToString(mSocketFd)) +
+				   ": zero bytes received, closing connection ");
 		mKeepAlive = false;
 		return;
 	}
@@ -103,7 +104,8 @@ bool ClientHandler::parseRequest()
 
 	if (mParser.parse(mRequest) == false)
 	{
-		LOG_ERROR(std::string("invalid request, closing connection ") + numToString(mSocketFd));
+		LOG_ERROR(std::string("parser(): client " + numToString(mSocketFd) +
+							  ": invalid request, closing connection "));
 		mKeepAlive = false;
 		return (false);
 	}
@@ -122,8 +124,8 @@ bool ClientHandler::sendResponse()
 		mBytesSent += bytes;
 	else
 		return (true);
-	LOG_NOTICE(std::string("response status: " + numToString(mResponseObj.mStatus) +
-						   ", total size: " + numToString(mBytesSent)));
+	LOG_NOTICE("response(): client: " + numToString(mSocketFd) + ": status " +
+			   numToString(mResponseObj.mStatus) + " total size " + numToString(mBytesSent));
 	return mBytesSent == mResponse.size();
 }
 
