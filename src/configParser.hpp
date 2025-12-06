@@ -23,6 +23,7 @@ struct LocationConfig {
 };
 
 struct ServerConfig {
+	std::string					serverName;
 	std::string					root;
 	std::vector<int> 			listenPorts;
 	std::map<int, std::string>	errorPages;

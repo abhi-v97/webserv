@@ -51,6 +51,8 @@
 		"random": "cpp",
 		"utility": "cpp",
 		"ranges": "cpp",
-		"span": "cpp"
+		"span": "cpp",
+		"csignal": "cpp",
+		"ctime": "cpp"
 	}
 }
