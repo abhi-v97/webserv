@@ -30,13 +30,13 @@ configParser::~configParser() {
 
 std::string	configParser::readFile(const std::string &filename)
 {
-    std::ifstream file(filename.c_str());
-    if (!file.is_open()) {
-        throw std::runtime_error("Could not open config file: " + filename);
-    }
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
+	std::ifstream file(filename.c_str());
+	if (!file.is_open()) {
+		throw std::runtime_error("Could not open config file: " + filename);
+	}
+	std::stringstream buffer;
+	buffer << file.rdbuf();
+	return buffer.str();
 }
 
 void	configParser::advance()
@@ -83,6 +83,15 @@ ServerConfig	configParser::parseServerBlock()
 			advance();
 			expect(SEMICOLON);
 		}
+		else if (current.type == WORD && current.value == "server_name")
+		{
+			advance();
+			if (current.type != WORD)
+				throw std::runtime_error("Expected server name");
+			cfg.serverName = current.value;
+			advance();
+			expect(SEMICOLON);
+		}
 		else if (current.value == "location")
 		{
 			LocationConfig loc = parseLocationBlock();
@@ -109,15 +118,40 @@ ServerConfig	configParser::parseServerBlock()
 		{
 			advance();
 			if (current.type != WORD)
-				throw std::runtime_error("Expected max body size value");
-			std::stringstream ss(current.value);
-			ss >> cfg.clientMaxBodySize;
+	   			throw std::runtime_error("Expected max body size value");
+			std::string val = current.value;
+			char unit = val[val.size() - 1];
+			long multiplier = 1;
+			if (unit == 'K' || unit == 'k')
+			{
+				multiplier = 1024;
+				val = val.substr(0, val.size() - 1);
+			}
+			else if (unit == 'M' || unit == 'm')
+			{
+				multiplier = 1024 * 1024;
+				val = val.substr(0, val.size() - 1);
+			}
+			else if (unit == 'G' || unit == 'g')
+			{
+				multiplier = 1024 * 1024 * 1024;
+				val = val.substr(0, val.size() - 1);
+			}
+			else if (!isdigit(unit))
+				throw std::runtime_error("Invalid size format for client_max_body_size");
+			std::stringstream ss(val);
+			long number;
+			ss >> number;
+			if (ss.fail() || number < 0)
+				throw std::runtime_error("Invalid number in client_max_body_size");
+			cfg.clientMaxBodySize = number * multiplier;
+			std::cout << cfg.clientMaxBodySize << std::endl; 
 			advance();
 			expect(SEMICOLON);
 		}
-		else
-			throw std::runtime_error("Unknown directive: " + current.value);
-	}
+	else
+		throw std::runtime_error("Unknown directive: " + current.value);
+}
 	expect(RBRACE);
 	return (cfg);
 }
