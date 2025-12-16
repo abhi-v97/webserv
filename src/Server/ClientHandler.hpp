@@ -31,22 +31,25 @@ public:
 	ssize_t			mBytesRead;
 	RequestParser	mParser;
 	ResponseBuilder mResponseObj;
-	CgiHandler		mCgiObj;
-	bool			mKeepAlive;
+	CgiHandler	   *mCgiObj;
 	bool			mResponseReady;
-
-	Dispatcher *mDispatch;
+	bool			mIsCgi;
+	bool			mIsCgiDone;
+	Dispatcher	   *mDispatch;
+	int				mPipeFd;
 
 	bool acceptSocket(int listenFd, Dispatcher *dispatch);
-	bool getKeepAlive() const;
-
+	void setCgiFd(int pipeFd);
+	void setCgiReady(bool status);
 	void handleEvents(struct pollfd &pollStruct);
-	int	 getFd() const;
+
+	bool		 getKeepAlive() const;
+	int			 getFd() const;
+	std::string &getResponse();
 
 private:
 	void readSocket();
 	bool parseRequest();
 	bool sendResponse();
 	bool generateResponse();
-	void requestClose();
 };

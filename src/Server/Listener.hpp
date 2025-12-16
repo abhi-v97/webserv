@@ -5,9 +5,10 @@
 #include "IHandler.hpp"
 
 class Dispatcher;
+
 /**
-	\class Listener 
-	
+	\class Listener
+
 	Concrete class derived from IHandler.
 
 	Responsible for creating new listener sockets for each port specified in config file.
@@ -21,13 +22,14 @@ public:
 	Listener(int port, Dispatcher *dispatch);
 	~Listener();
 
-	void					newConnection();
-	void					handleEvents(struct pollfd &pollStruct);
-	int						getFd() const;
-	bool					bindPort();
+	void newConnection();
+	void handleEvents(struct pollfd &pollStruct);
+	int	 getFd() const;
+	bool getKeepAlive() const;
+	bool bindPort();
 
 private:
 	int			mSocket;
 	sockaddr_in mSocketAddress;
-	Dispatcher  *mDispatch;
+	Dispatcher *mDispatch;
 };

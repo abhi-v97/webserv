@@ -11,8 +11,8 @@
 
 ClientHandler::ClientHandler()
 	: mSocketFd(-1), mRequest(), mResponse(), mClientIp(), mBytesSent(0), mBytesRead(0),
-	  mParser(RequestParser()), mResponseObj(ResponseBuilder()), mCgiObj(CgiHandler()),
-	  mKeepAlive(true), mResponseReady(false)
+	  mParser(RequestParser()), mResponseObj(ResponseBuilder()), mCgiObj(), mResponseReady(false),
+	  mIsCgi(false), mIsCgiDone(false)
 {
 }
 
@@ -51,7 +51,10 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 	{
 		this->readSocket();
 		if (this->parseRequest() == true)
+		{
 			pollStruct.events |= POLLOUT;
+			generateResponse();
+		}
 	}
 	else if (pollStruct.revents & POLLOUT)
 	{
@@ -111,6 +114,8 @@ bool ClientHandler::sendResponse()
 {
 	ssize_t bytes = 0;
 
+	if (mIsCgi == true && mIsCgiDone == false)
+		return (false);
 	while (mBytesSent < mResponse.size())
 	{
 		bytes = send(
@@ -126,32 +131,31 @@ bool ClientHandler::sendResponse()
 bool ClientHandler::generateResponse()
 {
 	ssize_t bytes = 0;
-	int		isCGI = 0;
 
+	mIsCgi = true;
 	if (mResponseReady == true)
 		return (true);
 	if (mParser.getParsingFinished() == false)
 		return (false);
 	mResponseReady = false;
-	if (isCGI)
+	if (mIsCgi)
 	{
-		// TODO: change this to accept other CGI requests
-		mCgiObj.execute("hello.py");
-
-		int outfd = mCgiObj.getOutFd();
-		mResponseObj.readCgiResponse(outfd);
-		mResponse = mResponseObj.getResponse();
+		mDispatch->createCgiHandler(this);
 	}
 	else
 	{
 		mResponse = mResponseObj.buildResponse();
 	}
-	mKeepAlive = mParser.keepAlive();
+	mKeepAlive = mParser.getKeepAliveRequest();
 	mParser.reset();
 	mResponseReady = true;
 	mBytesSent = 0;
 	return (true);
-	return (true);
+}
+
+std::string &ClientHandler::getResponse()
+{
+	return (this->mResponse);
 }
 
 bool ClientHandler::getKeepAlive() const
@@ -164,8 +168,12 @@ int ClientHandler::getFd() const
 	return (this->mSocketFd);
 }
 
-void ClientHandler::requestClose()
+void ClientHandler::setCgiReady(bool status)
 {
-	close(mSocketFd);
-	mSocketFd = -1;
+	this->mIsCgiDone = status;
+}
+
+void ClientHandler::setCgiFd(int pipeFd)
+{
+	this->mPipeFd = pipeFd;
 }
