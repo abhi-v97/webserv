@@ -112,8 +112,8 @@ public:
 	*/
 	void log(LogLevel level, const std::string &msg);
 
-	static void deleteLogger(); /**< use in main.cpp to free Logger object */
-	~Logger();					/**< deconstructor */
+	static void deleteInstance(); /**< use in main.cpp to free Logger object */
+	~Logger();					  /**< deconstructor */
 
 protected:
 	Logger(); /**< Private constructor */

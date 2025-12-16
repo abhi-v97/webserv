@@ -30,7 +30,7 @@ Logger::Logger()
 ** -------------------------------- DESTRUCTOR --------------------------------
 */
 
-void Logger::deleteLogger()
+void Logger::deleteInstance()
 {
 	if (Logger::mLogger)
 	{

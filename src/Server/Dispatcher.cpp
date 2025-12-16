@@ -38,6 +38,8 @@ void Dispatcher::loop()
 		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), 1);
 		if (pollNum < 0)
 		{
+			if (gSignal == SIGINT)
+				return;
 			LOG_FATAL(std::string("poll() failed: ") + std::strerror(errno));
 		}
 		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
