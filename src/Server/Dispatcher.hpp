@@ -4,6 +4,7 @@
 #include <sys/poll.h>
 #include <vector>
 
+#include "ClientHandler.hpp"
 #include "IHandler.hpp"
 
 /**
@@ -23,6 +24,7 @@ public:
 	bool setListeners();
 	void createListener(int port);
 	void createClient(int listenFd);
+	void createCgiHandler(ClientHandler *client);
 	void removeClient(int fd);
 
 	void loop();

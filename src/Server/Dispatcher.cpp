@@ -1,6 +1,7 @@
 #include <csignal>
 #include <sys/socket.h>
 
+#include "CgiHandler.hpp"
 #include "ClientHandler.hpp"
 #include "Dispatcher.hpp"
 #include "IHandler.hpp"
@@ -46,8 +47,10 @@ void Dispatcher::loop()
 		{
 			if (mPollFds[i].revents != 0)
 				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i]);
-			if (mHandler[mPollFds[i].fd]->getFd() < 0)
-				removeClient(mPollFds[i].fd);
+			if (mHandler[mPollFds[i].fd]->getKeepAlive() == false)
+			{
+				removeClient(i);
+			}
 		}
 	}
 }
@@ -85,6 +88,23 @@ void Dispatcher::createClient(int listenFd)
 	mPollFds.push_back(pollFdStruct);
 }
 
+void Dispatcher::createCgiHandler(ClientHandler *client)
+{
+	IHandler *cgi = new CgiHandler(client);
+
+	if (static_cast<CgiHandler *>(cgi)->execute("hello.py") == false)
+	{
+		delete cgi;
+		return;
+	}
+	int cgiFd = cgi->getFd();
+
+	mHandler[cgiFd] = cgi;
+	struct pollfd pollFdStruct = {cgiFd, POLLIN, 0};
+	client->setCgiFd(cgiFd);
+	mPollFds.push_back(pollFdStruct);
+}
+
 bool Dispatcher::setListeners()
 {
 	mListenCount = mHandler.size();
@@ -109,12 +129,14 @@ bool Dispatcher::setListeners()
 	return (true);
 }
 
-void Dispatcher::removeClient(int clientFd)
+void Dispatcher::removeClient(int pollNum)
 {
-	LOG_NOTICE(std::string("closing connection ") + numToString(mPollFds[clientFd].fd));
-	delete mHandler[mPollFds[clientFd].fd];
-	mHandler.erase(mPollFds[clientFd].fd);
-	mPollFds.erase(mPollFds.begin() + clientFd);
+	int clientFd = mPollFds[pollNum].fd;
+
+	LOG_NOTICE(std::string("closing connection ") + numToString(clientFd));
+	delete mHandler[clientFd];
+	mHandler.erase(clientFd);
+	mPollFds.erase(mPollFds.begin() + pollNum);
 }
 
 /**
