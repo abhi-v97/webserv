@@ -51,7 +51,7 @@ void Dispatcher::loop()
 			{
 				removeClient(i);
 			}
-		}
+0		}
 	}
 }
 

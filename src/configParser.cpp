@@ -21,11 +21,11 @@ configParser::configParser(const configParser &other) {
 }
 
 configParser::configParser() {
-	
+
 }
 
 configParser::~configParser() {
-	
+
 }
 
 std::string	configParser::readFile(const std::string &filename)
@@ -145,7 +145,7 @@ ServerConfig	configParser::parseServerBlock()
 			if (ss.fail() || number < 0)
 				throw std::runtime_error("Invalid number in client_max_body_size");
 			cfg.clientMaxBodySize = number * multiplier;
-			std::cout << cfg.clientMaxBodySize << std::endl; 
+			std::cout << "client max body: " << cfg.clientMaxBodySize << std::endl;
 			advance();
 			expect(SEMICOLON);
 		}

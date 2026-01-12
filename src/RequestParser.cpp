@@ -11,8 +11,9 @@
 #include "Utils.hpp"
 
 RequestParser::RequestParser()
-	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), bodyFd(-1), bodyExpected(0),
-	  bodyReceived(0), mHeaderEnd(0), mParsePos(0), mClientNum(), mStatusCode(200), mState(HEADER)
+	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), mChunkedRequest(false),
+	  bodyFd(-1), bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mParsePos(0), mChunkSize(0),
+	  mClientNum(), mStatusCode(200), mState(HEADER)
 {
 }
 
@@ -135,7 +136,7 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 
 	size_t fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
 	size_t fieldValueEnd = buffer.find_last_not_of("\r\n");
-	if (fieldValueStart == std::string::npos || fieldValueStart >= fieldValueEnd)
+	if (fieldValueStart == std::string::npos || fieldValueStart > fieldValueEnd)
 		mHeaderField[fieldName] = "";
 	else
 		mHeaderField[fieldName] =
@@ -143,15 +144,68 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 	return (true);
 }
 
+int hexToInt(std::string &hex)
+{
+	int result = 0;
+	// init base value to 1, representing 16^0
+	long base = 1;
+
+	for (std::string::iterator it = hex.begin(); it != hex.end(); it++)
+	{
+		if (*it >= '0' && *it <= '9')
+		{
+			result += (*it - '0') * base;
+		}
+		else if (*it >= 'A' && *it <= 'F')
+		{
+			result += (*it - 55) * base;
+		}
+		else if (*it >= 'a' && *it <= 'f')
+		{
+			result += (*it - 87) * base;
+		}
+		base *= 16;
+	}
+	return (result);
+}
+
+bool RequestParser::parseChunked(std::string &request)
+{
+	if (mChunkSize == 0)
+	{
+		size_t		endPos = request.find("\r\n", mParsePos);
+		std::string hexSize = request.substr(mParsePos, endPos);
+		mChunkSize = hexToInt(hexSize);
+	}
+	size_t available = 0;
+	size_t bodyStart = mParsePos + 4;
+	if (request.size() > bodyStart + bodyReceived)
+		available = request.size() - (bodyStart + bodyReceived);
+	if (available)
+	{
+	}
+	return (true);
+}
+
 bool RequestParser::parseBody(std::string &request)
 {
-	size_t contentLength = this->getContentLength();
-	size_t bodyStart = mParsePos + 4;
-
 	// init vars, triggered on first call
-	if (bodyExpected == 0 && contentLength > 0)
+	if (bodyExpected == 0 && mChunkedRequest == false)
 	{
-		bodyExpected = contentLength;
+		bodyExpected = this->getContentLength();
+
+		// no given content length
+		if (bodyExpected == 0)
+		{
+			if (this->getEncoding() == true)
+				mChunkedRequest = true;
+			else
+			{
+				parsingFinished = true;
+				return true;
+			}
+		}
+
 		bodyReceived = 0;
 		bodyToFile = false;
 		bodyFd = -1;
@@ -167,14 +221,11 @@ bool RequestParser::parseBody(std::string &request)
 		setNonBlockingFlag(bodyFd);
 	}
 
-	// no expected body, set parsing as finished
-	if (bodyExpected == 0)
-	{
-		parsingFinished = true;
-		return true;
-	}
+	if (mChunkedRequest == true)
+		return (parseChunked(request));
 
 	size_t available = 0;
+	size_t bodyStart = mParsePos + 2;
 	if (request.size() > bodyStart + bodyReceived)
 		available = request.size() - (bodyStart + bodyReceived);
 	if (available)
@@ -230,6 +281,33 @@ bool RequestParser::getKeepAliveRequest()
 	return (true);
 }
 
+// Returns false if HTTP version is 1.0 as it did not support chunked encoding
+// Also returns false if header field is not specified/has typos
+bool RequestParser::getEncoding()
+{
+	if (*(mHttpVersion.rbegin()) == '0')
+		return (false);
+	if (mHeaderField.find("transfer-encoding") != mHeaderField.end())
+	{
+		if (mHeaderField["transfer-encoding"] == "chunked")
+			return (true);
+	}
+	return (false);
+}
+
+size_t RequestParser::getContentLength()
+{
+	size_t result;
+
+	if (mHeaderField.find("content-length") != mHeaderField.end())
+	{
+		std::stringstream lengthStream(mHeaderField["content-length"]);
+		lengthStream >> result;
+		return result;
+	}
+	return 0;
+}
+
 void RequestParser::reset()
 {
 	mMethod = UNKNOWN;
@@ -244,19 +322,6 @@ void RequestParser::reset()
 	mHttpVersion.clear();
 	mHeaderField.clear();
 	mState = HEADER;
-}
-
-size_t RequestParser::getContentLength()
-{
-	size_t result;
-
-	if (mHeaderField.find("content-length") != mHeaderField.end())
-	{
-		std::stringstream lengthStream(mHeaderField["content-length"]);
-		lengthStream >> result;
-		return result;
-	}
-	return 0;
 }
 
 RequestMethod RequestParser::getMethod()

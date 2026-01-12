@@ -47,6 +47,8 @@ private:
 	void setMethod(const std::string &method);
 	bool validateUri(const std::string &uri);
 	bool parseHeaderField(std::string &buffer);
+	bool getEncoding();
+	bool parseChunked(std::string &request);
 
 	RequestMethod					   mMethod;
 	std::string						   mRequestUri;
@@ -55,11 +57,13 @@ private:
 	std::map<std::string, std::string> mHeaderField;
 	bool							   bodyToFile;
 	bool							   parsingFinished;
+	bool							   mChunkedRequest;
 	int								   bodyFd;
 	size_t							   bodyExpected;
 	size_t							   bodyReceived;
 	size_t							   mHeaderEnd;
 	size_t							   mParsePos;
+	size_t							   mChunkSize;
 	int								   mClientNum;
 	int								   mStatusCode;
 	RequestState					   mState;
