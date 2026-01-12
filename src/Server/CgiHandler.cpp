@@ -18,8 +18,7 @@ CgiHandler::CgiHandler(ClientHandler *client)
 {
 }
 
-CgiHandler::CgiHandler(const CgiHandler &src)
-	: m_header(src.m_header), m_PID(0), m_fd()
+CgiHandler::CgiHandler(const CgiHandler &src): m_header(src.m_header), m_PID(0), m_fd()
 {
 }
 
@@ -35,16 +34,6 @@ CgiHandler::~CgiHandler()
 /*
 ** --------------------------------- OVERLOAD ---------------------------------
 */
-
-CgiHandler &CgiHandler::operator=(const CgiHandler &rhs)
-{
-	if (this != &rhs)
-	{
-		this->m_header = rhs.m_header;
-		this->m_PID = rhs.m_PID;
-	}
-	return *this;
-}
 
 std::ostream &operator<<(std::ostream &outf, const CgiHandler &obj)
 {
@@ -82,8 +71,8 @@ bool CgiHandler::execute(std::string cgiName)
 		close(this->m_fd[1]);
 
 		char *argv[3];
-		argv[0] = (char *)"/usr/bin/python3";
-		argv[1] = (char *)cgiFile.c_str();
+		argv[0] = (char *) "/usr/bin/python3";
+		argv[1] = (char *) cgiFile.c_str();
 		argv[2] = NULL;
 		std::cerr << "starting execve" << std::endl;
 		execve(argv[0], argv, NULL);
