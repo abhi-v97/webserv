@@ -62,6 +62,8 @@ bool RequestParser::parse(std::string &requestBuffer)
 			if (fieldLine.size() == 0)
 			{
 				mState = BODY;
+				requestBuffer.erase(0, mParsePos + 2);
+				mParsePos = 0;
 				break;
 			}
 			else if (parseHeaderField(fieldLine) == false)
@@ -75,7 +77,6 @@ bool RequestParser::parse(std::string &requestBuffer)
 		{
 			mState = DONE;
 			parsingFinished = true;
-			requestBuffer.erase(0, mParsePos + this->getContentLength() + 2);
 			LOG_NOTICE(std::string("request parsed: ") + mRequestHeader);
 			return (true);
 		}
@@ -144,27 +145,25 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 	return (true);
 }
 
-int hexToInt(std::string &hex)
+unsigned int hexToInt(std::string &hex)
 {
-	int result = 0;
+	unsigned int result = 0;
+	unsigned int value = 0;
 	// init base value to 1, representing 16^0
-	long base = 1;
 
 	for (std::string::iterator it = hex.begin(); it != hex.end(); it++)
 	{
 		if (*it >= '0' && *it <= '9')
-		{
-			result += (*it - '0') * base;
-		}
+			value += *it - '0';
 		else if (*it >= 'A' && *it <= 'F')
-		{
-			result += (*it - 55) * base;
-		}
+			value += *it - 'A' + 10;
 		else if (*it >= 'a' && *it <= 'f')
-		{
-			result += (*it - 87) * base;
-		}
-		base *= 16;
+			value += *it - 'a' + 10;
+		else
+			break; // stop at invalid character
+
+		// result = result * 16 + value;
+		result = (result << 4) | value;
 	}
 	return (result);
 }
@@ -173,16 +172,37 @@ bool RequestParser::parseChunked(std::string &request)
 {
 	if (mChunkSize == 0)
 	{
-		size_t		endPos = request.find("\r\n", mParsePos);
+		size_t endPos = request.find("\r\n", mParsePos);
+		if (endPos == std::string::npos)
+			return (true);
+
 		std::string hexSize = request.substr(mParsePos, endPos);
 		mChunkSize = hexToInt(hexSize);
+
+		if (mChunkSize == 0)
+		{
+			parsingFinished = true;
+			mState = DONE;
+			return (true);
+		}
+
+		bodyReceived = 0;
+		mParsePos += endPos;
 	}
-	size_t available = 0;
-	size_t bodyStart = mParsePos + 4;
-	if (request.size() > bodyStart + bodyReceived)
-		available = request.size() - (bodyStart + bodyReceived);
+	size_t available = request.size();
+	size_t bodyStart = mParsePos;
 	if (available)
 	{
+		size_t	toWrite = std::min(available, mChunkSize - bodyReceived);
+		ssize_t bytesWritten = write(bodyFd, request.data(), toWrite);
+		if (bytesWritten < 0)
+			return (false);
+		bodyReceived += static_cast<size_t>(bytesWritten);
+		mParsePos = bodyStart + bytesWritten;
+		if (bytesWritten >= mChunkSize)
+		{
+			mChunkSize = 0;
+		}
 	}
 	return (true);
 }
@@ -224,14 +244,12 @@ bool RequestParser::parseBody(std::string &request)
 	if (mChunkedRequest == true)
 		return (parseChunked(request));
 
-	size_t available = 0;
-	size_t bodyStart = mParsePos + 2;
-	if (request.size() > bodyStart + bodyReceived)
-		available = request.size() - (bodyStart + bodyReceived);
+	size_t available = request.size();
+	size_t bodyStart = mParsePos;
 	if (available)
 	{
 		size_t	toWrite = std::min(available, bodyExpected - bodyReceived);
-		ssize_t bytesWritten = write(bodyFd, request.data() + bodyStart + bodyReceived, toWrite);
+		ssize_t bytesWritten = write(bodyFd, request.data(), toWrite);
 		if (bytesWritten < 0)
 			return (false);
 		bodyReceived += static_cast<size_t>(bytesWritten);
