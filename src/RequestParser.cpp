@@ -178,30 +178,39 @@ bool RequestParser::parseChunked(std::string &request)
 
 		std::string hexSize = request.substr(mParsePos, endPos);
 		mChunkSize = hexToInt(hexSize);
-
 		if (mChunkSize == 0)
 		{
+			endPos = request.find("\r\n", endPos + 2);
+			if (endPos == std::string::npos)
+				return (true);
 			parsingFinished = true;
 			mState = DONE;
+			mParsePos = endPos + 2;
 			return (true);
 		}
 
-		bodyReceived = 0;
-		mParsePos += endPos;
+		mParsePos += endPos + 2;
 	}
-	size_t available = request.size();
+	size_t available = request.size() - mParsePos;
 	size_t bodyStart = mParsePos;
 	if (available)
 	{
 		size_t	toWrite = std::min(available, mChunkSize - bodyReceived);
-		ssize_t bytesWritten = write(bodyFd, request.data(), toWrite);
+		ssize_t bytesWritten = write(bodyFd, request.data() + bodyStart, toWrite);
 		if (bytesWritten < 0)
 			return (false);
 		bodyReceived += static_cast<size_t>(bytesWritten);
 		mParsePos = bodyStart + bytesWritten;
-		if (bytesWritten >= mChunkSize)
+		if (bodyReceived >= mChunkSize)
 		{
 			mChunkSize = 0;
+			bodyReceived = 0;
+			if (request.find("\r\n", mParsePos) == std::string::npos)
+			{
+				// TODO: I think you're supposed to set a 400 bad request here
+				return (false);
+			}
+			mParsePos += 2;
 		}
 	}
 	return (true);
