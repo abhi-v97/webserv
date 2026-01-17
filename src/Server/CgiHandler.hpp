@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "IHandler.hpp"
+#include "configParser.hpp"
 
 class ClientHandler;
 

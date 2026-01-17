@@ -1,11 +1,13 @@
 #include "configParser.hpp"
 
-configParser::configParser(const std::string &filename) : input(readFile(filename)), lexer(input) {
+configParser::configParser(const std::string &filename): input(readFile(filename)), lexer(input)
+{
 	advance();
 	parseConfig();
 }
 
-configParser   &configParser::operator=(const configParser &other) {
+configParser &configParser::operator=(const configParser &other)
+{
 	if (this != &other)
 	{
 		input = other.input;
@@ -16,22 +18,24 @@ configParser   &configParser::operator=(const configParser &other) {
 	return *this;
 }
 
-configParser::configParser(const configParser &other) {
+configParser::configParser(const configParser &other)
+{
 	*this = other;
 }
 
-configParser::configParser() {
-
+configParser::configParser()
+{
 }
 
-configParser::~configParser() {
-
+configParser::~configParser()
+{
 }
 
-std::string	configParser::readFile(const std::string &filename)
+std::string configParser::readFile(const std::string &filename)
 {
 	std::ifstream file(filename.c_str());
-	if (!file.is_open()) {
+	if (!file.is_open())
+	{
 		throw std::runtime_error("Could not open config file: " + filename);
 	}
 	std::stringstream buffer;
@@ -39,22 +43,22 @@ std::string	configParser::readFile(const std::string &filename)
 	return buffer.str();
 }
 
-void	configParser::advance()
+void configParser::advance()
 {
-		current = lexer.getNextToken();
+	current = lexer.getNextToken();
 }
 
-void    configParser::expect(configTokenType type)
+void configParser::expect(configTokenType type)
 {
 	if (current.type != type)
 		throw std::runtime_error("Unexpected token: " + current.value);
 	advance();
 }
 
-ServerConfig	configParser::parseServerBlock()
+ServerConfig configParser::parseServerBlock()
 {
-	ServerConfig	cfg;
-	int				port;
+	ServerConfig cfg;
+	int			 port;
 
 	cfg.clientMaxBodySize = 0;
 	if (current.type != WORD || current.value != "server")
@@ -102,7 +106,7 @@ ServerConfig	configParser::parseServerBlock()
 			advance();
 			if (current.type != WORD)
 				throw std::runtime_error("Expected error code");
-			int	code;
+			int code;
 			code = 0;
 			std::stringstream ss(current.value);
 			ss >> code;
@@ -118,10 +122,10 @@ ServerConfig	configParser::parseServerBlock()
 		{
 			advance();
 			if (current.type != WORD)
-	   			throw std::runtime_error("Expected max body size value");
+				throw std::runtime_error("Expected max body size value");
 			std::string val = current.value;
-			char unit = val[val.size() - 1];
-			long multiplier = 1;
+			char		unit = val[val.size() - 1];
+			long		multiplier = 1;
 			if (unit == 'K' || unit == 'k')
 			{
 				multiplier = 1024;
@@ -140,7 +144,7 @@ ServerConfig	configParser::parseServerBlock()
 			else if (!isdigit(unit))
 				throw std::runtime_error("Invalid size format for client_max_body_size");
 			std::stringstream ss(val);
-			long number;
+			long			  number;
 			ss >> number;
 			if (ss.fail() || number < 0)
 				throw std::runtime_error("Invalid number in client_max_body_size");
@@ -149,14 +153,14 @@ ServerConfig	configParser::parseServerBlock()
 			advance();
 			expect(SEMICOLON);
 		}
-	else
-		throw std::runtime_error("Unknown directive: " + current.value);
-}
+		else
+			throw std::runtime_error("Unknown directive: " + current.value);
+	}
 	expect(RBRACE);
 	return (cfg);
 }
 
-void	configParser::parseConfig()
+void configParser::parseConfig()
 {
 	while (current.type != END)
 	{
@@ -165,9 +169,9 @@ void	configParser::parseConfig()
 	}
 }
 
-LocationConfig	configParser::parseLocationBlock()
+LocationConfig configParser::parseLocationBlock()
 {
-	LocationConfig	loc;
+	LocationConfig loc;
 
 	loc.redirectErr = 0;
 	if (current.type != WORD || current.value != "location")
@@ -228,7 +232,7 @@ LocationConfig	configParser::parseLocationBlock()
 			advance();
 			if (current.type != WORD)
 				throw std::runtime_error("Expected error code");
-			int	code = 0;
+			int				  code = 0;
 			std::stringstream ss(current.value);
 			ss >> code;
 			advance();

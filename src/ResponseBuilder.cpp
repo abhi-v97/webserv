@@ -35,6 +35,11 @@ std::string ResponseBuilder::getResponse()
 	return mResponse.str();
 }
 
+void ResponseBuilder::setStatus(int code)
+{
+	mStatus = code;
+}
+
 void ResponseBuilder::reset()
 {
 	mResponse.clear();
@@ -50,17 +55,13 @@ void ResponseBuilder::reset()
 // video player
 std::string ResponseBuilder::buildResponse(const std::string &uri)
 {
-	std::string file = "www";
-
-	file.append(uri);
-
-	std::ifstream	   requestFile(file.c_str());
+	std::ifstream	   requestFile(uri.c_str());
 	std::ostringstream response;
 	std::ostringstream body;
 
 	body << requestFile.rdbuf();
 	response << "HTTP/1.1 " << mStatus
-			 << " 0K\r\nContent-Type: " << MimeTypes::getInstance()->getType(uri)
+			 << "\r\nContent-Type: " << MimeTypes::getInstance()->getType(uri)
 			 << "\r\nAccept-Ranges: bytes\r\n";
 
 	if (mMax == 0)
@@ -94,7 +95,8 @@ bool ResponseBuilder::readCgiResponse(int pipeOutFd)
 		body << buffer;
 		len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	}
-	mResponse << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " << body.str().size()
+	mResponse << "HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: " << body.str().size()
+			  << "\r\n\r\n"
 			  << body.str();
 	std::cout << mResponse.str() << std::endl;
 
@@ -123,4 +125,15 @@ void ResponseBuilder::parseRangeHeader(RequestParser &parser)
 		mMax = std::atoi(rangeStr.c_str() + dash + 1);
 		std::cout << "minStr: " << mMin << ", maxStr: " << mMax << std::endl;
 	}
+}
+
+std::string ResponseBuilder::build404()
+{
+	return (
+		"HTTP/1.1 404\r\nContent-Type: text/html\r\nContent-Length: 266\r\n\r\n<!DOCTYPE "
+		"html><html lang=\"en\"><h1 "
+		"style=\"text-align: center;\">42 Webserv</h1><hr /><h2 style=\"text-align: "
+		"center;\">404</h2><p style=\"text-align: center;\">Not Found</p><p style=\"text-align: "
+		"center;\">The requested resource could not be found by the server!</p></html>");
+	mStatus = 404;
 }

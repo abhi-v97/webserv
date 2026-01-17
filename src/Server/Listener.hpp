@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 
 #include "IHandler.hpp"
+#include "configParser.hpp"
 
 class Dispatcher;
 
@@ -19,7 +20,7 @@ class Listener: public IHandler
 {
 public:
 	Listener();
-	Listener(int port, Dispatcher *dispatch);
+	Listener(int port, ServerConfig srv, Dispatcher *dispatch);
 	~Listener();
 
 	void newConnection();
@@ -32,4 +33,5 @@ private:
 	int			mSocket;
 	sockaddr_in mSocketAddress;
 	Dispatcher *mDispatch;
+	ServerConfig mConfig;
 };

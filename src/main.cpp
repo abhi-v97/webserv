@@ -16,11 +16,11 @@ int main(int argc, char **argv)
 	std::vector<ServerConfig> srv;
 
 	srv = parser.servers;
-	for (std::vector<ServerConfig>::iterator it = srv.begin(); it != srv.end(); it++)
+	for (std::vector<ServerConfig>::iterator serverIter = srv.begin(); serverIter != srv.end(); serverIter++)
 	{
-		std::vector<int> &ports = (*it).listenPorts;
-		for (std::vector<int>::iterator it = ports.begin(); it != ports.end(); it++)
-			dispatch.createListener(*it);
+		std::vector<int> &ports = (*serverIter).listenPorts;
+		for (std::vector<int>::iterator portIter = ports.begin(); portIter != ports.end(); portIter++)
+			dispatch.createListener(*portIter, *serverIter);
 	}
 
 	if (dispatch.setListeners() == false)

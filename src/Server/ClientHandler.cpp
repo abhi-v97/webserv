@@ -8,6 +8,7 @@
 #include "Logger.hpp"
 #include "ResponseBuilder.hpp"
 #include "Utils.hpp"
+#include "configParser.hpp"
 
 ClientHandler::ClientHandler()
 	: mSocketFd(-1), mRequest(), mResponse(), mClientIp(), mBytesSent(0), mBytesRead(0),
@@ -16,7 +17,7 @@ ClientHandler::ClientHandler()
 {
 }
 
-bool ClientHandler::acceptSocket(int listenFd, Dispatcher *dispatch)
+bool ClientHandler::acceptSocket(int listenFd, ServerConfig srv, Dispatcher *dispatch)
 {
 	struct sockaddr_in clientAddr = {};
 	socklen_t		   clientLen = sizeof(clientAddr);
@@ -37,6 +38,7 @@ bool ClientHandler::acceptSocket(int listenFd, Dispatcher *dispatch)
 			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24) << std::endl;
 
 	mClientIp = ipStream.str();
+	mConfig = srv;
 	mDispatch = dispatch;
 	return (setNonBlockingFlag(mSocketFd));
 }
@@ -63,6 +65,7 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 			if (this->sendResponse() == true)
 			{
 				mResponseReady = false;
+				mParser.reset();
 				parseRequest();
 			}
 			return;
@@ -112,6 +115,69 @@ bool ClientHandler::parseRequest()
 	return (mParser.getParsingFinished());
 }
 
+bool isCgi(std::string &uri)
+{
+	if (uri.find(".py") != std::string::npos || uri.find(".sh") != std::string::npos)
+		return (true);
+	return (false);
+}
+
+bool ClientHandler::checkUri(std::string &uri)
+{
+	std::vector<LocationConfig> &locs = this->mConfig.locations;
+	
+	int i = 1;
+	for (; i < uri.size(); i++)
+	{
+		if (uri.at(i) == '/')
+			break;
+		i++;
+	}
+	std::string folder = uri.substr(0, i);
+	for (int j = 0; j < locs.size(); j++)
+	{
+		if (folder == locs[j].path)
+			return (true);
+	}
+	return (false);
+}
+
+bool ClientHandler::generateResponse()
+{
+	ssize_t bytes = 0;
+
+	mIsCgi = isCgi(this->mParser.getUri());
+	if (mResponseReady == true)
+		return (true);
+	if (mParser.getParsingFinished() == false)
+		return (false);
+	mResponseReady = false;
+	if (mIsCgi)
+	{
+		mDispatch->createCgiHandler(this);
+	}
+	else if (checkUri(mParser.getUri()) == false)
+	{
+		mResponseObj.setStatus(404);
+		if (mConfig.errorPages.find(404) != mConfig.errorPages.end())
+		{
+			std::string errorPage = mConfig.root;
+			mResponse = mResponseObj.buildResponse(errorPage.append(mConfig.errorPages[404]));
+		}
+		else
+		 	mResponse = mResponseObj.build404();
+	}
+	else
+	{
+		mResponseObj.parseRangeHeader(mParser);
+		mResponse = mResponseObj.buildResponse(mParser.getUri());
+	}
+	mKeepAlive = mParser.getKeepAliveRequest();
+	mResponseReady = true;
+	mBytesSent = 0;
+	return (true);
+}
+
 bool ClientHandler::sendResponse()
 {
 	ssize_t bytes = 0;
@@ -127,32 +193,6 @@ bool ClientHandler::sendResponse()
 	LOG_NOTICE("response(): client: " + numToString(mSocketFd) + ": status " +
 			   numToString(mResponseObj.mStatus) + " total size " + numToString(mBytesSent));
 	return mBytesSent == mResponse.size();
-}
-
-bool ClientHandler::generateResponse()
-{
-	ssize_t bytes = 0;
-
-	mIsCgi = false;
-	if (mResponseReady == true)
-		return (true);
-	if (mParser.getParsingFinished() == false)
-		return (false);
-	mResponseReady = false;
-	if (mIsCgi)
-	{
-		mDispatch->createCgiHandler(this);
-	}
-	else
-	{
-		mResponseObj.parseRangeHeader(mParser);
-		mResponse = mResponseObj.buildResponse(mParser.getUri());
-	}
-	mKeepAlive = mParser.getKeepAliveRequest();
-	mParser.reset();
-	mResponseReady = true;
-	mBytesSent = 0;
-	return (true);
 }
 
 std::string &ClientHandler::getResponse()

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "ClientHandler.hpp"
+#include "configParser.hpp"
 #include "IHandler.hpp"
 
 /**
@@ -22,8 +23,8 @@ public:
 	~Dispatcher();
 
 	bool setListeners();
-	void createListener(int port);
-	void createClient(int listenFd);
+	void createListener(int port, ServerConfig srv);
+	void createClient(int listenFd, ServerConfig srv);
 	void createCgiHandler(ClientHandler *client);
 	void removeClient(int fd);
 

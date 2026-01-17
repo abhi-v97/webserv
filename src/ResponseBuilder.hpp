@@ -16,9 +16,11 @@ public:
 	void reset();
 
 	std::string buildResponse(const std::string &uri);
+	std::string build404();
 	bool		readCgiResponse(int pipeOutFd);
 	void		parseRangeHeader(RequestParser &parser);
 
+	void setStatus(int code);
 	std::string getResponse();
 	size_t		mMin;
 	size_t		mMax;

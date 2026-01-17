@@ -6,6 +6,7 @@
 #include "Listener.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
+#include "configParser.hpp"
 
 Listener::Listener()
 {
@@ -15,20 +16,21 @@ Listener::~Listener()
 {
 }
 
-Listener::Listener(int port, Dispatcher *dispatch)
+Listener::Listener(int port, ServerConfig srv, Dispatcher *dispatch)
 {
 	mDispatch = dispatch;
 	mSocketAddress = sockaddr_in();
 	mSocketAddress.sin_family = AF_INET;
 	mSocketAddress.sin_port = htons(port);
 	mSocketAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
+	mConfig = srv;
 }
 
 // TODO: handle requestClose for listener events
 void Listener::handleEvents(pollfd &pollStruct)
 {
 	if (pollStruct.revents & POLLIN)
-		mDispatch->createClient(mSocket);
+		mDispatch->createClient(mSocket, mConfig);
 }
 
 /**

@@ -8,6 +8,7 @@
 #include "IHandler.hpp"
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
+#include "configParser.hpp"
 
 class Dispatcher;
 
@@ -37,8 +38,9 @@ public:
 	bool			mIsCgiDone;
 	Dispatcher	   *mDispatch;
 	int				mPipeFd;
+	ServerConfig	mConfig;
 
-	bool acceptSocket(int listenFd, Dispatcher *dispatch);
+	bool acceptSocket(int listenFd, ServerConfig srv, Dispatcher *dispatch);
 	void setCgiFd(int pipeFd);
 	void setCgiReady(bool status);
 	void handleEvents(struct pollfd &pollStruct);
@@ -52,4 +54,5 @@ private:
 	bool parseRequest();
 	bool sendResponse();
 	bool generateResponse();
+	bool checkUri(std::string &uri);
 };
