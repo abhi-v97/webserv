@@ -70,8 +70,8 @@ void Dispatcher::loop()
 		if (timeNow >= nextReap)
 		{
 			for (std::map<std::string, Session *>::iterator it = mSessions.begin();
-				it != mSessions.end();
-				it++)
+				 it != mSessions.end();
+				 it++)
 			{
 				// inactive for 30 minutes or more
 				if (timeNow - it->second->lastAccessed > 1800)
@@ -186,10 +186,11 @@ void Dispatcher::removeClient(int pollNum)
 Session *Dispatcher::addSession(std::string sessionId)
 {
 	Session *newSession = new Session();
+	time_t	 now = time(NULL);
 
+	newSession->lastAccessed = now;
+	newSession->timeCreated = now;
 	newSession->user = "";
-	newSession->lastAccessed = time(NULL);
-	newSession->timeCreated = time(NULL);
 	mSessions[sessionId] = newSession;
 	return (newSession);
 }

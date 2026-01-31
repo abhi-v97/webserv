@@ -17,6 +17,7 @@ ClientHandler::ClientHandler()
 	  mPipeFd(0), mRequestNum(0)
 {
 	mParser.mResponse = &mResponseObj;
+	mResponseObj.mParser = &mParser;
 }
 
 bool ClientHandler::acceptSocket(int listenFd, ServerConfig srv, Dispatcher *dispatch)
@@ -212,7 +213,7 @@ bool ClientHandler::checkUri(std::string &uri)
 
 void ClientHandler::handleCookies()
 {
-	bool sessionFound = false;
+	bool		 sessionFound = false;
 	std::string &cookies = mParser.getCookies();
 	Session		*session = NULL;
 	std::string	 id;

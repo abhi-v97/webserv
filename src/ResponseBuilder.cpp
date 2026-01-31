@@ -55,6 +55,24 @@ void ResponseBuilder::reset()
 	mResponse.clear();
 }
 
+void ResponseBuilder::addCookies()
+{
+	std::string &cookies = mParser->getCookies();
+	size_t		 cookieStart = 0;
+	size_t		 cookieEnd = 0;
+
+	while (42)
+	{
+		cookieStart = cookies.find_first_not_of(' ', cookieStart);
+		cookieEnd = cookies.find_first_of(';', cookieStart);
+		std::string temp = cookies.substr(cookieStart, cookieEnd - cookieStart);
+		if (temp.empty())
+			break;
+		mResponse << "set-cookie: " << temp << "\r\n";
+		temp.clear();
+	}
+}
+
 // simple response to a GET request
 // grabs the file pointed to by uri and passes it along in its entirety
 // now supports the content-type attribute, provided a matching extension exists in mime.types file
@@ -66,13 +84,13 @@ void ResponseBuilder::reset()
 std::string ResponseBuilder::buildResponse(const std::string &uri)
 {
 	std::ifstream	   requestFile(uri.c_str());
-	std::ostringstream response;
 	std::ostringstream body;
 
 	body << requestFile.rdbuf();
-	response << "HTTP/1.1 " << mStatus
-			 << "\r\nContent-Type: " << MimeTypes::getInstance()->getType(uri)
-			 << "\r\nAccept-Ranges: bytes\r\n";
+	mResponse << "HTTP/1.1 " << mStatus << "\r\n";
+	addCookies();
+	mResponse << "Content-Type: " << MimeTypes::getInstance()->getType(uri)
+			  << "\r\nAccept-Ranges: bytes\r\n";
 
 	if (mMax == 0)
 		mMax = body.str().size() - 1;
@@ -80,16 +98,16 @@ std::string ResponseBuilder::buildResponse(const std::string &uri)
 	if (mStatus == 206)
 	{
 		std::string newbody = body.str().substr(mMin, mMax - mMin + 1);
-		response << "Content-Range: bytes " << mMin << "-" << mMax << "/" << body.str().size();
-		response << "\r\nContent-Length: " << mMax - mMin + 1;
-		response << "\r\n\r\n" << newbody;
+		mResponse << "Content-Range: bytes " << mMin << "-" << mMax << "/" << body.str().size();
+		mResponse << "\r\nContent-Length: " << mMax - mMin + 1;
+		mResponse << "\r\n\r\n" << newbody;
 	}
 	else
 	{
-		response << "Content-Length: " << body.str().size();
-		response << "\r\n\r\n" << body.str();
+		mResponse << "Content-Length: " << body.str().size();
+		mResponse << "\r\n\r\n" << body.str();
 	}
-	return response.str();
+	return mResponse.str();
 }
 
 bool ResponseBuilder::readCgiResponse(int pipeOutFd)

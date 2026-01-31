@@ -23,13 +23,16 @@ public:
 	std::string getResponse();
 	void		reset();
 
-	size_t		mMin;
-	size_t		mMax;
-	size_t		mStatus;
-	std::string mErrorMsg;
+	size_t		   mMin;
+	size_t		   mMax;
+	size_t		   mStatus;
+	std::string	   mErrorMsg;
+	RequestParser *mParser;
 
 private:
-	std::stringstream mResponse;
+	std::ostringstream mResponse;
+
+	void addCookies();
 };
 
 #endif
