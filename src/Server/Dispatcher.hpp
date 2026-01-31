@@ -1,12 +1,21 @@
 #pragma once
 #include <cstddef>
+#include <ctime>
 #include <map>
+#include <string>
 #include <sys/poll.h>
 #include <vector>
 
 #include "ClientHandler.hpp"
-#include "configParser.hpp"
 #include "IHandler.hpp"
+#include "configParser.hpp"
+
+struct Session
+{
+	std::string user;
+	time_t		timeCreated;
+	time_t		lastAccessed;
+};
 
 /**
 	\class Dispatcher
@@ -27,13 +36,17 @@ public:
 	void createClient(int listenFd, ServerConfig srv);
 	void createCgiHandler(ClientHandler *client);
 	void removeClient(int fd);
+	Session *addSession(std::string sessionId);
+	Session *getSession(std::string sessionId);
+	void deleteSession(std::string &sessionId);
 
 	void loop();
 
 private:
-	size_t					  mListenCount;
-	std::vector<pollfd>		  mPollFds;
-	std::map<int, IHandler *> mHandler;
+	size_t							 mListenCount;
+	std::vector<pollfd>				 mPollFds;
+	std::map<int, IHandler *>		 mHandler;
+	std::map<std::string, Session *> mSessions;
 };
 
 void signalHandler(int sig);

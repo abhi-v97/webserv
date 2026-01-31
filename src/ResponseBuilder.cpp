@@ -4,6 +4,7 @@
 #include <iostream>
 #include <unistd.h>
 
+#include "Logger.hpp"
 #include "MimeTypes.hpp"
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
@@ -40,8 +41,17 @@ void ResponseBuilder::setStatus(int code)
 	mStatus = code;
 }
 
+void ResponseBuilder::setErrorMessage(const std::string &error)
+{
+	this->mErrorMsg = error;
+}
+
 void ResponseBuilder::reset()
 {
+	mStatus = 200;
+	mMin = 0;
+	mMax = 0;
+	mErrorMsg.clear();
 	mResponse.clear();
 }
 
@@ -127,13 +137,18 @@ void ResponseBuilder::parseRangeHeader(RequestParser &parser)
 	}
 }
 
-std::string ResponseBuilder::build404()
+std::string ResponseBuilder::buildErrorResponse()
 {
-	return (
-		"HTTP/1.1 404\r\nContent-Type: text/html\r\nContent-Length: 266\r\n\r\n<!DOCTYPE "
-		"html><html lang=\"en\"><h1 "
-		"style=\"text-align: center;\">42 Webserv</h1><hr /><h2 style=\"text-align: "
-		"center;\">404</h2><p style=\"text-align: center;\">Not Found</p><p style=\"text-align: "
-		"center;\">The requested resource could not be found by the server!</p></html>");
-	mStatus = 404;
+	std::stringstream body;
+
+	body << "HTTP/1.1 " << numToString(mStatus)
+		 << "\r\nContent-Type: text/html\r\nContent-Length: " << numToString(80 + mErrorMsg.size())
+		 << "\r\n\r\n<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
+		 << numToString(mStatus) << "</h2><p> " << mErrorMsg << "</p></html>";
+	return (body.str());
+}
+
+int ResponseBuilder::getStatus()
+{
+	return (mStatus);
 }

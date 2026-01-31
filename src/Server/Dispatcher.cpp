@@ -28,21 +28,65 @@ Dispatcher::~Dispatcher()
 		delete mHandler[mPollFds[i].fd];
 		close(mPollFds[i].fd);
 	}
+	for (std::map<std::string, Session *>::iterator it = mSessions.begin(); it != mSessions.end();
+		 it++)
+	{
+		if (it->second)
+			delete it->second;
+	}
+	mSessions.clear();
 }
 
 void Dispatcher::loop()
 {
 	std::signal(SIGINT, SIG_IGN);
 	std::signal(SIGINT, signalHandler);
+	time_t nextReap = time(NULL) + 900;
+
 	while (gSignal == 0)
 	{
-		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), 1);
+		// reaper, delete inactive sessions every 15 minutes (900 secs)
+		time_t timeNow = time(NULL);
+		int	   timeout = 60; // 60s timeout cap
+		long   remaining = static_cast<long>(nextReap - timeNow);
+
+		if (remaining < 1)
+			timeout = 1;
+		else
+		{
+			if (remaining < timeout)
+				timeout = static_cast<int>(remaining);
+		}
+
+		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), timeout * 1000);
 		if (pollNum < 0)
 		{
 			if (gSignal == SIGINT)
 				return;
 			LOG_FATAL(std::string("poll() failed: ") + std::strerror(errno));
 		}
+
+		timeNow += timeout;
+		if (timeNow >= nextReap)
+		{
+			for (std::map<std::string, Session *>::iterator it = mSessions.begin();
+				it != mSessions.end();
+				it++)
+			{
+				// inactive for 30 minutes or more
+				if (timeNow - it->second->lastAccessed > 1800)
+				{
+					delete it->second;
+					mSessions.erase(it);
+				}
+			}
+			nextReap = timeNow + 900;
+		}
+
+		// poll timed out, if no fds were ready, continue to next poll
+		if (pollNum == 0)
+			continue;
+
 		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
 		{
 			if (mPollFds[i].revents != 0)
@@ -137,6 +181,28 @@ void Dispatcher::removeClient(int pollNum)
 	delete mHandler[clientFd];
 	mHandler.erase(clientFd);
 	mPollFds.erase(mPollFds.begin() + pollNum);
+}
+
+Session *Dispatcher::addSession(std::string sessionId)
+{
+	Session *newSession = new Session();
+
+	newSession->user = "";
+	newSession->lastAccessed = time(NULL);
+	newSession->timeCreated = time(NULL);
+	mSessions[sessionId] = newSession;
+	return (newSession);
+}
+
+Session *Dispatcher::getSession(std::string sessionId)
+{
+	return (this->mSessions[sessionId]);
+}
+
+void Dispatcher::deleteSession(std::string &sessionId)
+{
+	delete mSessions[sessionId];
+	mSessions.erase(sessionId);
 }
 
 /**

@@ -6,6 +6,8 @@
 int main(int argc, char **argv)
 {
 	std::string configFile;
+	
+	srand(time(0));
 
 	if (argc < 2)
 		configFile = "default.conf";

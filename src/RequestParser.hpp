@@ -5,11 +5,14 @@
 #include <map>
 #include <string>
 
+#include "ResponseBuilder.hpp"
+
 enum RequestMethod
 {
 	GET,
 	HEAD,
 	POST,
+	DELETE,
 	UNKNOWN,
 };
 
@@ -28,19 +31,19 @@ public:
 	~RequestParser();
 
 	std::map<std::string, std::string> &getHeaders();
-	void								getRequestHeader();
+	std::string						   &getRequestHeader();
 	RequestMethod						getMethod();
 	std::string						   &getUri();
 	size_t								getContentLength();
 	bool								getParsingFinished() const;
 	bool								getKeepAliveRequest();
-
-	void setHeaderEnd(const size_t &headerEnd);
-
-	bool parse(std::string &requestBuffer);
-	bool parseBody(std::string &request);
-
-	void reset();
+	std::string							getPostFile();
+	void								setHeaderEnd(const size_t &headerEnd);
+	bool								parse(std::string &requestBuffer);
+	bool								parseBody(std::string &request);
+	std::string						   &getCookies();
+	void								reset();
+	ResponseBuilder						*mResponse;
 
 private:
 	bool parseHeader(const std::string &header);
@@ -54,6 +57,8 @@ private:
 	std::string						   mRequestUri;
 	std::string						   mHttpVersion;
 	std::string						   mRequestHeader;
+	std::string						   tempFile;
+	std::string						   mCookies;
 	std::map<std::string, std::string> mHeaderField;
 	bool							   bodyToFile;
 	bool							   parsingFinished;

@@ -38,12 +38,16 @@ public:
 	bool			mIsCgiDone;
 	Dispatcher	   *mDispatch;
 	int				mPipeFd;
+	int				mRequestNum;
 	ServerConfig	mConfig;
 
 	bool acceptSocket(int listenFd, ServerConfig srv, Dispatcher *dispatch);
 	void setCgiFd(int pipeFd);
 	void setCgiReady(bool status);
 	void handleEvents(struct pollfd &pollStruct);
+	bool writePost(std::string &uri, LocationConfig loc);
+	bool deleteMethod(std::string &uri, LocationConfig loc);
+	void handleCookies();
 
 	bool		 getKeepAlive() const;
 	int			 getFd() const;

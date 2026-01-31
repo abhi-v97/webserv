@@ -77,7 +77,6 @@ bool RequestParser::parse(std::string &requestBuffer)
 		{
 			mState = DONE;
 			parsingFinished = true;
-			LOG_NOTICE(std::string("request parsed: ") + mRequestHeader);
 			return (true);
 		}
 		if (parseBody(requestBuffer) == false)
@@ -137,11 +136,15 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 
 	size_t fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
 	size_t fieldValueEnd = buffer.find_last_not_of("\r\n");
+	std::string fieldValue = buffer.substr(fieldValueStart, fieldValueEnd - fieldValueStart + 1);
+	if (fieldName == "cookie")
+	{
+		mCookies += fieldValue + "; ";
+	}
 	if (fieldValueStart == std::string::npos || fieldValueStart > fieldValueEnd)
 		mHeaderField[fieldName] = "";
 	else
-		mHeaderField[fieldName] =
-			buffer.substr(fieldValueStart, fieldValueEnd - fieldValueStart + 1);
+		mHeaderField[fieldName] = fieldValue;
 	return (true);
 }
 
@@ -238,11 +241,8 @@ bool RequestParser::parseBody(std::string &request)
 		bodyReceived = 0;
 		bodyToFile = false;
 		bodyFd = -1;
-		std::string tempFile;
 
-		// TODO: change tempFile so that you're writing directly to POST location (after checking
-		// uri and location is valid)
-		tempFile = "client_" + numToString(mClientNum) + ".tmp";
+		tempFile = numToString(rand()) + ".tmp";
 		int flags = O_WRONLY | O_CREAT | O_TRUNC;
 		bodyFd = open(tempFile.c_str(), flags, 0644);
 		if (bodyFd < 0)
@@ -322,6 +322,11 @@ bool RequestParser::getEncoding()
 	return (false);
 }
 
+std::string RequestParser::getPostFile()
+{
+	return (this->tempFile);
+}
+
 size_t RequestParser::getContentLength()
 {
 	size_t result;
@@ -348,7 +353,13 @@ void RequestParser::reset()
 	mRequestUri.clear();
 	mHttpVersion.clear();
 	mHeaderField.clear();
+	mCookies.clear();
 	mState = HEADER;
+}
+
+std::string &RequestParser::getRequestHeader()
+{
+	return this->mRequestHeader;
 }
 
 RequestMethod RequestParser::getMethod()
@@ -364,6 +375,11 @@ std::string &RequestParser::getUri()
 std::map<std::string, std::string> &RequestParser::getHeaders()
 {
 	return this->mHeaderField;
+}
+
+std::string &RequestParser::getCookies()
+{
+	return (this->mCookies);
 }
 
 bool RequestParser::getParsingFinished() const
@@ -389,5 +405,9 @@ void RequestParser::setMethod(const std::string &methodStr)
 	else if (methodStr == "POST")
 	{
 		mMethod = POST;
+	}
+	else if (methodStr == "DELETE")
+	{
+		mMethod = DELETE;
 	}
 }
