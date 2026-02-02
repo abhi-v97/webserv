@@ -118,7 +118,7 @@ void Dispatcher::createListener(int port, ServerConfig srv)
 /**
 	\brief factory method to add a new client to poll loop
 */
-void Dispatcher::createClient(int listenFd, ServerConfig srv)
+void Dispatcher::createClient(int listenFd, ServerConfig *srv)
 {
 	IHandler *client = new ClientHandler();
 

@@ -61,16 +61,23 @@ void ResponseBuilder::addCookies()
 	size_t		 cookieStart = 0;
 	size_t		 cookieEnd = 0;
 
-	while (42)
+	while (42 && cookies.empty() == false)
 	{
-		cookieStart = cookies.find_first_not_of(' ', cookieStart);
+		cookieStart = cookies.find_first_not_of("; ", cookieStart);
 		cookieEnd = cookies.find_first_of(';', cookieStart);
+		if (cookieStart == std::string::npos)
+			break;
 		std::string temp = cookies.substr(cookieStart, cookieEnd - cookieStart);
+		std::string cookieName = temp.substr(0, temp.find_first_of('='));
+		if (cookieName != "last-accessed" && cookieName != "total-requests")
+			mResponse << "set-cookie: " << temp << "\r\n";
 		if (temp.empty())
 			break;
-		mResponse << "set-cookie: " << temp << "\r\n";
 		temp.clear();
+		cookieStart = cookieEnd;
 	}
+	mResponse << "set-cookie: last-accessed=" << getTimestamp() << "\r\n";
+	mResponse << "set-cookie: total-requests=" << numToString(99) << "\r\n";
 }
 
 // simple response to a GET request
@@ -83,9 +90,11 @@ void ResponseBuilder::addCookies()
 // video player
 std::string ResponseBuilder::buildResponse(const std::string &uri)
 {
-	std::ifstream	   requestFile(uri.c_str());
 	std::ostringstream body;
+	std::string file = mConfig->root;
+	file.append(uri);
 
+	std::ifstream	   requestFile(file.c_str());
 	body << requestFile.rdbuf();
 	mResponse << "HTTP/1.1 " << mStatus << "\r\n";
 	addCookies();

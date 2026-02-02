@@ -33,7 +33,7 @@ public:
 
 	bool setListeners();
 	void createListener(int port, ServerConfig srv);
-	void createClient(int listenFd, ServerConfig srv);
+	void createClient(int listenFd, ServerConfig *srv);
 	void createCgiHandler(ClientHandler *client);
 	void removeClient(int fd);
 	Session *addSession(std::string sessionId);

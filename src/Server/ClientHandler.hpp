@@ -39,9 +39,9 @@ public:
 	Dispatcher	   *mDispatch;
 	int				mPipeFd;
 	int				mRequestNum;
-	ServerConfig	mConfig;
+	ServerConfig	*mConfig;
 
-	bool acceptSocket(int listenFd, ServerConfig srv, Dispatcher *dispatch);
+	bool acceptSocket(int listenFd, ServerConfig *srv, Dispatcher *dispatch);
 	void setCgiFd(int pipeFd);
 	void setCgiReady(bool status);
 	void handleEvents(struct pollfd &pollStruct);

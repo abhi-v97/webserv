@@ -22,7 +22,7 @@ Listener::Listener(int port, ServerConfig srv, Dispatcher *dispatch)
 	mSocketAddress = sockaddr_in();
 	mSocketAddress.sin_family = AF_INET;
 	mSocketAddress.sin_port = htons(port);
-	mSocketAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
+	mSocketAddress.sin_addr.s_addr = inet_addr("10.11.3.5");
 	mConfig = srv;
 }
 
@@ -30,7 +30,7 @@ Listener::Listener(int port, ServerConfig srv, Dispatcher *dispatch)
 void Listener::handleEvents(pollfd &pollStruct)
 {
 	if (pollStruct.revents & POLLIN)
-		mDispatch->createClient(mSocket, mConfig);
+		mDispatch->createClient(mSocket, &mConfig);
 }
 
 /**

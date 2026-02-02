@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstring>
 #include <sstream>
+#include "configParser.hpp"
 
 class RequestParser;
 
@@ -28,6 +29,7 @@ public:
 	size_t		   mStatus;
 	std::string	   mErrorMsg;
 	RequestParser *mParser;
+	ServerConfig *mConfig;
 
 private:
 	std::ostringstream mResponse;

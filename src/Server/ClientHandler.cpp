@@ -20,7 +20,7 @@ ClientHandler::ClientHandler()
 	mResponseObj.mParser = &mParser;
 }
 
-bool ClientHandler::acceptSocket(int listenFd, ServerConfig srv, Dispatcher *dispatch)
+bool ClientHandler::acceptSocket(int listenFd, ServerConfig *srv, Dispatcher *dispatch)
 {
 	struct sockaddr_in clientAddr = {};
 	socklen_t		   clientLen = sizeof(clientAddr);
@@ -42,6 +42,7 @@ bool ClientHandler::acceptSocket(int listenFd, ServerConfig srv, Dispatcher *dis
 
 	mClientIp = ipStream.str();
 	mConfig = srv;
+	mResponseObj.mConfig = mConfig;
 	mDispatch = dispatch;
 	return (setNonBlockingFlag(mSocketFd));
 }
@@ -57,7 +58,7 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 		this->readSocket();
 		if (this->parseRequest() == true)
 		{
-			LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig.serverName +
+			LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig->serverName +
 								   ", request: \"" + mParser.getRequestHeader() + "\""));
 			pollStruct.events |= POLLOUT;
 			generateResponse();
@@ -169,15 +170,13 @@ bool ClientHandler::deleteMethod(std::string &uri, LocationConfig loc)
 
 bool ClientHandler::checkUri(std::string &uri)
 {
-	std::vector<LocationConfig> &locs = this->mConfig.locations;
+	std::vector<LocationConfig> &locs = this->mConfig->locations;
 
 	int i = 1;
-	for (; i < uri.size(); i++)
-	{
-		if (uri.at(i) == '/')
-			break;
-		i++;
-	}
+	size_t folderEnd = uri.rfind('/');
+	if (folderEnd == std::string::npos)
+		i = 1;
+
 	std::string folder = uri.substr(0, i);
 	for (int j = 0; j < locs.size(); j++)
 	{
@@ -271,9 +270,9 @@ bool ClientHandler::generateResponse()
 	{
 		mResponseObj.setStatus(404);
 		mResponseObj.setErrorMessage("Page not found!");
-		if (mConfig.errorPages.find(404) != mConfig.errorPages.end())
+		if (mConfig->errorPages.find(404) != mConfig->errorPages.end())
 		{
-			mResponse = mResponseObj.buildResponse(mConfig.root.append(mConfig.errorPages[404]));
+			mResponse = mResponseObj.buildResponse(mConfig->root.append(mConfig->errorPages[404]));
 		}
 		else
 			mResponse = mResponseObj.buildErrorResponse();
