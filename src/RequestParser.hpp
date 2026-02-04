@@ -38,12 +38,13 @@ public:
 	bool								getParsingFinished() const;
 	bool								getKeepAliveRequest();
 	std::string							getPostFile();
+	int									getRequestCount();
 	void								setHeaderEnd(const size_t &headerEnd);
 	bool								parse(std::string &requestBuffer);
 	bool								parseBody(std::string &request);
 	std::string						   &getCookies();
 	void								reset();
-	ResponseBuilder						*mResponse;
+	ResponseBuilder					   *mResponse;
 
 private:
 	bool parseHeader(const std::string &header);
@@ -71,6 +72,7 @@ private:
 	size_t							   mChunkSize;
 	int								   mClientNum;
 	int								   mStatusCode;
+	int								   mRequestCount;
 	RequestState					   mState;
 };
 

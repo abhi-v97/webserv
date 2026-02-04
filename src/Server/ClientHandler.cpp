@@ -172,12 +172,11 @@ bool ClientHandler::checkUri(std::string &uri)
 {
 	std::vector<LocationConfig> &locs = this->mConfig->locations;
 
-	int i = 1;
 	size_t folderEnd = uri.rfind('/');
 	if (folderEnd == std::string::npos)
-		i = 1;
+		folderEnd = 1;
 
-	std::string folder = uri.substr(0, i);
+	std::string folder = uri.substr(0, folderEnd);
 	for (int j = 0; j < locs.size(); j++)
 	{
 		if (folder == locs[j].path)

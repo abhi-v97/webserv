@@ -22,7 +22,7 @@ Listener::Listener(int port, ServerConfig srv, Dispatcher *dispatch)
 	mSocketAddress = sockaddr_in();
 	mSocketAddress.sin_family = AF_INET;
 	mSocketAddress.sin_port = htons(port);
-	mSocketAddress.sin_addr.s_addr = inet_addr("10.11.3.5");
+	mSocketAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
 	mConfig = srv;
 }
 

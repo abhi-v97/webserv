@@ -77,6 +77,7 @@ bool RequestParser::parse(std::string &requestBuffer)
 		{
 			mState = DONE;
 			parsingFinished = true;
+			mRequestCount++;
 			return (true);
 		}
 		if (parseBody(requestBuffer) == false)
@@ -234,6 +235,8 @@ bool RequestParser::parseBody(std::string &request)
 			else
 			{
 				parsingFinished = true;
+				mState = DONE;
+				mRequestCount++;
 				return true;
 			}
 		}
@@ -268,6 +271,7 @@ bool RequestParser::parseBody(std::string &request)
 	if (bodyReceived >= bodyExpected)
 	{
 		parsingFinished = true;
+				mRequestCount++;
 		mState = DONE;
 	}
 	return true;
@@ -410,4 +414,9 @@ void RequestParser::setMethod(const std::string &methodStr)
 	{
 		mMethod = DELETE;
 	}
+}
+
+int RequestParser::getRequestCount()
+{
+	return (this->mRequestCount);
 }

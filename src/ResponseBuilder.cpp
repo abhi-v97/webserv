@@ -77,7 +77,7 @@ void ResponseBuilder::addCookies()
 		cookieStart = cookieEnd;
 	}
 	mResponse << "set-cookie: last-accessed=" << getTimestamp() << "\r\n";
-	mResponse << "set-cookie: total-requests=" << numToString(99) << "\r\n";
+	mResponse << "set-cookie: total-requests=" << mParser->getRequestCount() << "\r\n";
 }
 
 // simple response to a GET request

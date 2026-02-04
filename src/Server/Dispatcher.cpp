@@ -45,27 +45,23 @@ void Dispatcher::loop()
 
 	while (gSignal == 0)
 	{
-		// reaper, delete inactive sessions every 15 minutes (900 secs)
 		time_t timeNow = time(NULL);
 		int	   timeout = 60; // 60s timeout cap
 		long   remaining = static_cast<long>(nextReap - timeNow);
 
 		if (remaining < 1)
 			timeout = 1;
-		else
-		{
-			if (remaining < timeout)
-				timeout = static_cast<int>(remaining);
-		}
+		else if (remaining < timeout)
+			timeout = static_cast<int>(remaining);
 
 		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), timeout * 1000);
 		if (pollNum < 0)
 		{
-			if (gSignal == SIGINT)
-				return;
-			LOG_FATAL(std::string("poll() failed: ") + std::strerror(errno));
+			if (gSignal != SIGINT)
+				LOG_FATAL(std::string("loop(): poll() failed: ") + std::strerror(errno));
+			return;
 		}
-
+		// reaper, delete inactive sessions every 15 minutes (900 secs)
 		timeNow += timeout;
 		if (timeNow >= nextReap)
 		{
@@ -82,11 +78,10 @@ void Dispatcher::loop()
 			}
 			nextReap = timeNow + 900;
 		}
-
 		// poll timed out, if no fds were ready, continue to next poll
 		if (pollNum == 0)
 			continue;
-
+		// web server main event loop
 		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
 		{
 			if (mPollFds[i].revents != 0)
