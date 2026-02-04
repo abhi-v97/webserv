@@ -18,8 +18,7 @@ public:
 	std::string buildErrorResponse();
 	bool		readCgiResponse(int pipeOutFd);
 	void		parseRangeHeader(RequestParser &parser);
-	void		setStatus(int code);
-	void		setErrorMessage(const std::string &error);
+	void		setError(int code, const std::string error);
 	int			getStatus();
 	std::string getResponse();
 	void		reset();

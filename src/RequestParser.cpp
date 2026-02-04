@@ -90,25 +90,28 @@ bool RequestParser::parse(std::string &requestBuffer)
 
 bool RequestParser::parseHeader(const std::string &header)
 {
+	LOG_DEBUG("parseHeader()"); 
 	// extract method
 	int methodEnd = header.find_first_of(' ', 0);
 	setMethod(header.substr(0, methodEnd));
 	if (mMethod == UNKNOWN)
-		return (false);
+		return (LOG_ERROR("parseHeader(): Unknown method"), mResponse->setError(400, "Unknown method"), false);
 
 	// extract uri
 	int uriEnd = header.find_first_of(' ', methodEnd + 1);
 	if (uriEnd == std::string::npos)
-		return (false);
+		return (LOG_ERROR("parseHeader(): bad request-line"), false);
 	mRequestUri = header.substr(methodEnd + 1, uriEnd - methodEnd - 1);
 	if (validateUri(mRequestUri) == false)
-		return (false);
+		return (LOG_ERROR("parseHeader(): invalid URI format, must begin with / or http://"),
+				false); // TODO: read the RFC again, see how URI is formatted, make a note of it
+						// somewhere
 
 	// extract version
 	int versionEnd = header.find_first_of('\r', uriEnd + 1);
 	mHttpVersion = header.substr(uriEnd + 1, 8);
 	if (mHttpVersion != "HTTP/1.1" && mHttpVersion != "HTTP/1.0")
-		return (false);
+		return (LOG_ERROR("parseHeader(): Bad or invalid HTTP version"), false);
 
 	// advance state
 	mState = FIELD;
@@ -135,8 +138,8 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 		*it = std::tolower(static_cast<unsigned char>(*it));
 	}
 
-	size_t fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
-	size_t fieldValueEnd = buffer.find_last_not_of("\r\n");
+	size_t		fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
+	size_t		fieldValueEnd = buffer.find_last_not_of("\r\n");
 	std::string fieldValue = buffer.substr(fieldValueStart, fieldValueEnd - fieldValueStart + 1);
 	if (fieldName == "cookie")
 	{
@@ -271,7 +274,7 @@ bool RequestParser::parseBody(std::string &request)
 	if (bodyReceived >= bodyExpected)
 	{
 		parsingFinished = true;
-				mRequestCount++;
+		mRequestCount++;
 		mState = DONE;
 	}
 	return true;

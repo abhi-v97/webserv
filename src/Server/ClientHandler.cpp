@@ -28,11 +28,7 @@ bool ClientHandler::acceptSocket(int listenFd, ServerConfig *srv, Dispatcher *di
 
 	mSocketFd = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
 	if (mSocketFd < 0)
-	{
-		LOG_ERROR(std::string("accept() failed: ") + std::strerror(errno));
-		return (false);
-	}
-	LOG_INFO(std::string("accept(): new client fd: ") + numToString(mSocketFd));
+		return (LOG_ERROR(std::string("acceptSocket(): ") + std::strerror(errno)), false);
 
 	// get client IP from sockaddr struct, store it as std::string
 	ipStream << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
@@ -44,6 +40,8 @@ bool ClientHandler::acceptSocket(int listenFd, ServerConfig *srv, Dispatcher *di
 	mConfig = srv;
 	mResponseObj.mConfig = mConfig;
 	mDispatch = dispatch;
+	LOG_INFO(std::string("acceptSocket(): new client fd: ") + numToString(mSocketFd) +
+			 "; ip: " + mClientIp);
 	return (setNonBlockingFlag(mSocketFd));
 }
 
@@ -53,7 +51,7 @@ ClientHandler::~ClientHandler()
 
 void ClientHandler::handleEvents(pollfd &pollStruct)
 {
-	if (pollStruct.revents & POLLIN)
+	if (pollStruct.revents & POLLIN && mParser.getParsingFinished() == false)
 	{
 		this->readSocket();
 		if (this->parseRequest() == true)
@@ -94,14 +92,14 @@ void ClientHandler::readSocket()
 	bytesRead = recv(mSocketFd, buffer, 4096, 0);
 	if (bytesRead < 0)
 	{
-		LOG_WARNING(std::string("recv(): client " + numToString(mSocketFd)) +
+		LOG_WARNING(std::string("readSocket(): client " + numToString(mSocketFd)) +
 					": failed to read from socket");
 		return;
 	}
 	else if (bytesRead == 0)
 	{
-		LOG_NOTICE(std::string("recv(): client " + numToString(mSocketFd)) +
-				   ": zero bytes received, closing connection ");
+		LOG_NOTICE(std::string("readSocket(): client " + numToString(mSocketFd)) +
+				   ": zero bytes received, closing connection");
 		mKeepAlive = false;
 		return;
 	}
@@ -115,8 +113,8 @@ bool ClientHandler::parseRequest()
 
 	if (mParser.parse(mRequest) == false)
 	{
-		LOG_ERROR(std::string("parser(): client " + numToString(mSocketFd) +
-							  ": invalid request, closing connection "));
+		LOG_ERROR(std::string("parseRequest(): client " + numToString(mSocketFd) +
+							  ": invalid HTTP request, closing connection"));
 		mKeepAlive = false;
 		return (false);
 	}
@@ -140,8 +138,7 @@ bool ClientHandler::writePost(std::string &uri, LocationConfig loc)
 	std::ofstream out(file.c_str(), std::ios::app);
 	if (!inf || !out)
 	{
-		mResponseObj.setStatus(500);
-		mResponseObj.setErrorMessage("Internal Server Error");
+		mResponseObj.setError(500, "Internal Server Error: failed to write POST message");
 		return (false);
 	}
 	out << inf.rdbuf();
@@ -161,8 +158,7 @@ bool ClientHandler::deleteMethod(std::string &uri, LocationConfig loc)
 	}
 	if (remove(file.c_str()))
 	{
-		mResponseObj.setStatus(500);
-		mResponseObj.setErrorMessage("Internal Server Error");
+		mResponseObj.setError(500, "Internal Server Error: Failed to remove the file");
 		return (false);
 	}
 	return (true);
@@ -173,7 +169,7 @@ bool ClientHandler::checkUri(std::string &uri)
 	std::vector<LocationConfig> &locs = this->mConfig->locations;
 
 	size_t folderEnd = uri.rfind('/');
-	if (folderEnd == std::string::npos)
+	if (folderEnd == std::string::npos || folderEnd == 0)
 		folderEnd = 1;
 
 	std::string folder = uri.substr(0, folderEnd);
@@ -204,7 +200,6 @@ bool ClientHandler::checkUri(std::string &uri)
 	if (mResponseObj.mStatus < 400)
 	{
 		// TODO
-		mResponseObj.setStatus(405);
 	}
 	return (false);
 }
@@ -267,8 +262,7 @@ bool ClientHandler::generateResponse()
 	}
 	else if (checkUri(mParser.getUri()) == false)
 	{
-		mResponseObj.setStatus(404);
-		mResponseObj.setErrorMessage("Page not found!");
+		mResponseObj.setError(404, "Page not found!");
 		if (mConfig->errorPages.find(404) != mConfig->errorPages.end())
 		{
 			mResponse = mResponseObj.buildResponse(mConfig->root.append(mConfig->errorPages[404]));

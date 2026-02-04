@@ -7,6 +7,8 @@
 
 #include "ResponseBuilder.hpp"
 
+#define INVALID_METHOD "Unknown method provided in request header"
+
 enum RequestMethod
 {
 	GET,
@@ -53,6 +55,7 @@ private:
 	bool parseHeaderField(std::string &buffer);
 	bool getEncoding();
 	bool parseChunked(std::string &request);
+	void handleError(const std::string &errorMsg);
 
 	RequestMethod					   mMethod;
 	std::string						   mRequestUri;

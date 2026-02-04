@@ -36,13 +36,9 @@ std::string ResponseBuilder::getResponse()
 	return mResponse.str();
 }
 
-void ResponseBuilder::setStatus(int code)
+void ResponseBuilder::setError(int code, const std::string error)
 {
-	mStatus = code;
-}
-
-void ResponseBuilder::setErrorMessage(const std::string &error)
-{
+	this->mStatus = code;
 	this->mErrorMsg = error;
 }
 
@@ -91,10 +87,17 @@ void ResponseBuilder::addCookies()
 std::string ResponseBuilder::buildResponse(const std::string &uri)
 {
 	std::ostringstream body;
-	std::string file = mConfig->root;
+	std::string		   file = mConfig->root;
 	file.append(uri);
 
-	std::ifstream	   requestFile(file.c_str());
+	std::ifstream requestFile(file.c_str());
+
+	// if the requested file is not found
+	if (requestFile.good() == false)
+	{
+		setError(404, "The requested file could not be found");
+		return (this->buildErrorResponse());
+	}
 	body << requestFile.rdbuf();
 	mResponse << "HTTP/1.1 " << mStatus << "\r\n";
 	addCookies();
@@ -164,6 +167,9 @@ void ResponseBuilder::parseRangeHeader(RequestParser &parser)
 	}
 }
 
+// TODO: add a function that writes the name of the error code based on what error occurred next to
+// the Error code, so for 404 it returns "Not Found", for 500 its "Internal Server Error"
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
 std::string ResponseBuilder::buildErrorResponse()
 {
 	std::stringstream body;
