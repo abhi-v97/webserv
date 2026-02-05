@@ -9,6 +9,8 @@
 
 #define INVALID_METHOD "Unknown method provided in request header"
 
+class ClientHandler;
+
 enum RequestMethod
 {
 	GET,
@@ -47,6 +49,7 @@ public:
 	std::string						   &getCookies();
 	void								reset();
 	ResponseBuilder					   *mResponse;
+	ClientHandler					   *mClient;
 
 private:
 	bool parseHeader(const std::string &header);
@@ -55,7 +58,7 @@ private:
 	bool parseHeaderField(std::string &buffer);
 	bool getEncoding();
 	bool parseChunked(std::string &request);
-	void handleError(const std::string &errorMsg);
+	void handleError(int code, const std::string &errorMsg);
 
 	RequestMethod					   mMethod;
 	std::string						   mRequestUri;
@@ -65,7 +68,7 @@ private:
 	std::string						   mCookies;
 	std::map<std::string, std::string> mHeaderField;
 	bool							   bodyToFile;
-	bool							   parsingFinished;
+	bool							   mParsingFinished;
 	bool							   mChunkedRequest;
 	int								   bodyFd;
 	size_t							   bodyExpected;

@@ -15,7 +15,8 @@
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-ResponseBuilder::ResponseBuilder(): mResponse(), mMin(0), mMax(0), mStatus(200)
+ResponseBuilder::ResponseBuilder()
+	: mResponseReady(false), mResponseStream(), mMin(0), mMax(0), mStatus(200)
 {
 }
 
@@ -33,13 +34,7 @@ ResponseBuilder::~ResponseBuilder()
 
 std::string ResponseBuilder::getResponse()
 {
-	return mResponse.str();
-}
-
-void ResponseBuilder::setError(int code, const std::string error)
-{
-	this->mStatus = code;
-	this->mErrorMsg = error;
+	return mResponseStream.str();
 }
 
 void ResponseBuilder::reset()
@@ -47,8 +42,10 @@ void ResponseBuilder::reset()
 	mStatus = 200;
 	mMin = 0;
 	mMax = 0;
-	mErrorMsg.clear();
+	mResponseReady = false;
 	mResponse.clear();
+	mResponseStream.clear();
+	mResponseStream.str("");
 }
 
 void ResponseBuilder::addCookies()
@@ -66,14 +63,14 @@ void ResponseBuilder::addCookies()
 		std::string temp = cookies.substr(cookieStart, cookieEnd - cookieStart);
 		std::string cookieName = temp.substr(0, temp.find_first_of('='));
 		if (cookieName != "last-accessed" && cookieName != "total-requests")
-			mResponse << "set-cookie: " << temp << "\r\n";
+			mResponseStream << "set-cookie: " << temp << "\r\n";
 		if (temp.empty())
 			break;
 		temp.clear();
 		cookieStart = cookieEnd;
 	}
-	mResponse << "set-cookie: last-accessed=" << getTimestamp() << "\r\n";
-	mResponse << "set-cookie: total-requests=" << mParser->getRequestCount() << "\r\n";
+	mResponseStream << "set-cookie: last-accessed=" << getTimestamp() << "\r\n";
+	mResponseStream << "set-cookie: total-requests=" << mParser->getRequestCount() << "\r\n";
 }
 
 // simple response to a GET request
@@ -84,7 +81,7 @@ void ResponseBuilder::addCookies()
 // Accept-ranges: bytes tells browser etc that our web server supports range
 // requests, i.e browser can pause and resume downloads, or jump around in a
 // video player
-std::string ResponseBuilder::buildResponse(const std::string &uri)
+void ResponseBuilder::buildResponse(const std::string &uri)
 {
 	std::ostringstream body;
 	std::string		   file = mConfig->root;
@@ -95,13 +92,13 @@ std::string ResponseBuilder::buildResponse(const std::string &uri)
 	// if the requested file is not found
 	if (requestFile.good() == false)
 	{
-		setError(404, "The requested file could not be found");
-		return (this->buildErrorResponse());
+		buildErrorResponse(400, "The requested file could not be found");
+		return;
 	}
 	body << requestFile.rdbuf();
-	mResponse << "HTTP/1.1 " << mStatus << "\r\n";
+	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
 	addCookies();
-	mResponse << "Content-Type: " << MimeTypes::getInstance()->getType(uri)
+	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(uri)
 			  << "\r\nAccept-Ranges: bytes\r\n";
 
 	if (mMax == 0)
@@ -110,16 +107,16 @@ std::string ResponseBuilder::buildResponse(const std::string &uri)
 	if (mStatus == 206)
 	{
 		std::string newbody = body.str().substr(mMin, mMax - mMin + 1);
-		mResponse << "Content-Range: bytes " << mMin << "-" << mMax << "/" << body.str().size();
-		mResponse << "\r\nContent-Length: " << mMax - mMin + 1;
-		mResponse << "\r\n\r\n" << newbody;
+		mResponseStream << "Content-Range: bytes " << mMin << "-" << mMax << "/" << body.str().size();
+		mResponseStream << "\r\nContent-Length: " << mMax - mMin + 1;
+		mResponseStream << "\r\n\r\n" << newbody;
 	}
 	else
 	{
-		mResponse << "Content-Length: " << body.str().size();
-		mResponse << "\r\n\r\n" << body.str();
+		mResponseStream << "Content-Length: " << body.str().size();
+		mResponseStream << "\r\n\r\n" << body.str();
 	}
-	return mResponse.str();
+	mResponse = mResponseStream.str();
 }
 
 bool ResponseBuilder::readCgiResponse(int pipeOutFd)
@@ -135,10 +132,10 @@ bool ResponseBuilder::readCgiResponse(int pipeOutFd)
 		body << buffer;
 		len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	}
-	mResponse << "HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: " << body.str().size()
+	mResponseStream << "HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: " << body.str().size()
 			  << "\r\n\r\n"
 			  << body.str();
-	std::cout << mResponse.str() << std::endl;
+	std::cout << mResponseStream.str() << std::endl;
 
 	// returns true if len isn't positive, meaning read is finished
 	return len <= 0;
@@ -170,15 +167,15 @@ void ResponseBuilder::parseRangeHeader(RequestParser &parser)
 // TODO: add a function that writes the name of the error code based on what error occurred next to
 // the Error code, so for 404 it returns "Not Found", for 500 its "Internal Server Error"
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
-std::string ResponseBuilder::buildErrorResponse()
+void ResponseBuilder::buildErrorResponse(int code, const std::string &errorMsg)
 {
-	std::stringstream body;
-
-	body << "HTTP/1.1 " << numToString(mStatus)
-		 << "\r\nContent-Type: text/html\r\nContent-Length: " << numToString(80 + mErrorMsg.size())
+	mResponseStream << "HTTP/1.1 " << numToString(code)
+		 << "\r\nContent-Type: text/html\r\nContent-Length: " << numToString(80 + errorMsg.size())
 		 << "\r\n\r\n<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
-		 << numToString(mStatus) << "</h2><p> " << mErrorMsg << "</p></html>";
-	return (body.str());
+		 << numToString(code) << "</h2><p> " << errorMsg << "</p></html>";
+	mResponseReady = true;
+	mStatus = code;
+	mResponse = mResponseStream.str();
 }
 
 int ResponseBuilder::getStatus()

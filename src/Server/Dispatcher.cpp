@@ -84,10 +84,10 @@ void Dispatcher::loop()
 		// web server main event loop
 		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
 		{
-			if (mPollFds[i].revents != 0) {
-				
-			}
+			if (mPollFds[i].revents != 0)
+			{
 				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i]);
+			}
 			if (mHandler[mPollFds[i].fd]->getKeepAlive() == false)
 			{
 				removeClient(i);

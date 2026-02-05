@@ -11,7 +11,7 @@
 #include "Utils.hpp"
 
 RequestParser::RequestParser()
-	: mMethod(UNKNOWN), bodyToFile(false), parsingFinished(false), mChunkedRequest(false),
+	: mMethod(UNKNOWN), bodyToFile(false), mParsingFinished(false), mChunkedRequest(false),
 	  bodyFd(-1), bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mParsePos(0), mChunkSize(0),
 	  mClientNum(), mStatusCode(200), mState(HEADER)
 {
@@ -76,7 +76,7 @@ bool RequestParser::parse(std::string &requestBuffer)
 		if (mMethod != POST)
 		{
 			mState = DONE;
-			parsingFinished = true;
+			mParsingFinished = true;
 			mRequestCount++;
 			return (true);
 		}
@@ -90,12 +90,12 @@ bool RequestParser::parse(std::string &requestBuffer)
 
 bool RequestParser::parseHeader(const std::string &header)
 {
-	LOG_DEBUG("parseHeader()"); 
+	LOG_DEBUG("parsing request-line");
 	// extract method
 	int methodEnd = header.find_first_of(' ', 0);
 	setMethod(header.substr(0, methodEnd));
 	if (mMethod == UNKNOWN)
-		return (LOG_ERROR("parseHeader(): Unknown method"), mResponse->setError(400, "Unknown method"), false);
+		return (handleError(400, "Unknown/invalid HTTP method provided"), false);
 
 	// extract uri
 	int uriEnd = header.find_first_of(' ', methodEnd + 1);
@@ -103,7 +103,7 @@ bool RequestParser::parseHeader(const std::string &header)
 		return (LOG_ERROR("parseHeader(): bad request-line"), false);
 	mRequestUri = header.substr(methodEnd + 1, uriEnd - methodEnd - 1);
 	if (validateUri(mRequestUri) == false)
-		return (LOG_ERROR("parseHeader(): invalid URI format, must begin with / or http://"),
+		return (handleError(400, "parseHeader(): invalid URI format, must begin with / or http://"),
 				false); // TODO: read the RFC again, see how URI is formatted, make a note of it
 						// somewhere
 
@@ -111,7 +111,7 @@ bool RequestParser::parseHeader(const std::string &header)
 	int versionEnd = header.find_first_of('\r', uriEnd + 1);
 	mHttpVersion = header.substr(uriEnd + 1, 8);
 	if (mHttpVersion != "HTTP/1.1" && mHttpVersion != "HTTP/1.0")
-		return (LOG_ERROR("parseHeader(): Bad or invalid HTTP version"), false);
+		return (handleError(400, "Bad or invalid HTTP version"), false);
 
 	// advance state
 	mState = FIELD;
@@ -190,7 +190,7 @@ bool RequestParser::parseChunked(std::string &request)
 			endPos = request.find("\r\n", endPos + 2);
 			if (endPos == std::string::npos)
 				return (true);
-			parsingFinished = true;
+			mParsingFinished = true;
 			mState = DONE;
 			mParsePos = endPos + 2;
 			return (true);
@@ -237,7 +237,7 @@ bool RequestParser::parseBody(std::string &request)
 				mChunkedRequest = true;
 			else
 			{
-				parsingFinished = true;
+				mParsingFinished = true;
 				mState = DONE;
 				mRequestCount++;
 				return true;
@@ -273,11 +273,18 @@ bool RequestParser::parseBody(std::string &request)
 
 	if (bodyReceived >= bodyExpected)
 	{
-		parsingFinished = true;
+		mParsingFinished = true;
 		mRequestCount++;
 		mState = DONE;
 	}
 	return true;
+}
+
+void RequestParser::handleError(int statusCode, const std::string &errorMsg)
+{
+	LOG_ERROR("RequestParser: " + errorMsg);
+	mResponse->buildErrorResponse(statusCode, errorMsg);
+	mParsingFinished = true;
 }
 
 /**
@@ -351,7 +358,7 @@ void RequestParser::reset()
 {
 	mMethod = UNKNOWN;
 	bodyToFile = false;
-	parsingFinished = false;
+	mParsingFinished = false;
 	bodyFd = -1;
 	bodyExpected = 0;
 	bodyReceived = 0;
@@ -391,7 +398,7 @@ std::string &RequestParser::getCookies()
 
 bool RequestParser::getParsingFinished() const
 {
-	return this->parsingFinished;
+	return this->mParsingFinished;
 }
 
 void RequestParser::setHeaderEnd(const size_t &headerEnd)

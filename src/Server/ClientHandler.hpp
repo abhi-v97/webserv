@@ -26,14 +26,12 @@ public:
 
 	int				mSocketFd;
 	std::string		mRequest;
-	std::string		mResponse;
 	std::string		mClientIp;
 	ssize_t			mBytesSent;
 	ssize_t			mBytesRead;
 	RequestParser	mParser;
 	ResponseBuilder mResponseObj;
 	CgiHandler	   *mCgiObj;
-	bool			mResponseReady;
 	bool			mIsCgi;
 	bool			mIsCgiDone;
 	Dispatcher	   *mDispatch;

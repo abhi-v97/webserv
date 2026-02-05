@@ -12,12 +12,12 @@
 #include "configParser.hpp"
 
 ClientHandler::ClientHandler()
-	: mSocketFd(-1), mRequest(), mResponse(), mClientIp(), mBytesSent(0), mBytesRead(0), mParser(),
-	  mResponseObj(), mCgiObj(), mResponseReady(false), mIsCgi(false), mIsCgiDone(false),
-	  mPipeFd(0), mRequestNum(0)
+	: mSocketFd(-1), mRequest(), mClientIp(), mBytesSent(0), mBytesRead(0), mParser(),
+	  mResponseObj(), mCgiObj(), mIsCgi(false), mIsCgiDone(false), mPipeFd(0), mRequestNum(0)
 {
 	mParser.mResponse = &mResponseObj;
 	mResponseObj.mParser = &mParser;
+	mParser.mClient = this;
 }
 
 bool ClientHandler::acceptSocket(int listenFd, ServerConfig *srv, Dispatcher *dispatch)
@@ -68,7 +68,8 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 		{
 			if (this->sendResponse() == true)
 			{
-				mResponseReady = false;
+				mRequestNum++;
+				mBytesSent = 0;
 				mParser.reset();
 				mResponseObj.reset();
 				parseRequest();
@@ -76,7 +77,6 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 			return;
 		}
 		pollStruct.events &= ~POLLOUT;
-		mRequestNum++;
 	}
 }
 
@@ -113,10 +113,17 @@ bool ClientHandler::parseRequest()
 
 	if (mParser.parse(mRequest) == false)
 	{
-		LOG_ERROR(std::string("parseRequest(): client " + numToString(mSocketFd) +
-							  ": invalid HTTP request, closing connection"));
-		mKeepAlive = false;
-		return (false);
+		// TODO: close the connection only for terrible requests
+		// if the request error was 400 (bad format) or 404 (file not found), there's no need to
+		// close the connection straight away
+		// close it for errors where we do not know where the next request may start on the socket
+		// stream, eg payload too large, 414 uri too long, or 408 request timeout (if implemented)
+
+		// LOG_ERROR(std::string("parseRequest(): client " + numToString(mSocketFd) +
+		// 					  ": invalid HTTP request, closing connection"));
+		// mKeepAlive = false;
+		// return (false);
+		mRequest.clear();
 	}
 	return (mParser.getParsingFinished());
 }
@@ -138,7 +145,7 @@ bool ClientHandler::writePost(std::string &uri, LocationConfig loc)
 	std::ofstream out(file.c_str(), std::ios::app);
 	if (!inf || !out)
 	{
-		mResponseObj.setError(500, "Internal Server Error: failed to write POST message");
+		// mResponseObj.setError(500, "Internal Server Error: failed to write POST message");
 		return (false);
 	}
 	out << inf.rdbuf();
@@ -158,7 +165,7 @@ bool ClientHandler::deleteMethod(std::string &uri, LocationConfig loc)
 	}
 	if (remove(file.c_str()))
 	{
-		mResponseObj.setError(500, "Internal Server Error: Failed to remove the file");
+		// mResponseObj.setError(500, "Internal Server Error: Failed to remove the file");
 		return (false);
 	}
 	return (true);
@@ -249,35 +256,35 @@ bool ClientHandler::generateResponse()
 	ssize_t bytes = 0;
 
 	mIsCgi = isCgi(this->mParser.getUri());
-	if (mResponseReady == true)
+	if (mResponseObj.mResponseReady == true)
 		return (true);
 	if (mParser.getParsingFinished() == false)
 		return (false);
 	handleCookies();
 	// TODO:insert error checking ehre, don't post or delete or cgi if an error has been foudn
-	mResponseReady = false;
 	if (mIsCgi)
 	{
 		mDispatch->createCgiHandler(this);
 	}
 	else if (checkUri(mParser.getUri()) == false)
 	{
-		mResponseObj.setError(404, "Page not found!");
+		// mResponseObj.setError(404, "Page not found!");
 		if (mConfig->errorPages.find(404) != mConfig->errorPages.end())
 		{
-			mResponse = mResponseObj.buildResponse(mConfig->root.append(mConfig->errorPages[404]));
+			mResponseObj.buildResponse(mConfig->root.append(mConfig->errorPages[404]));
 		}
 		else
-			mResponse = mResponseObj.buildErrorResponse();
+		{
+			mResponseObj.buildErrorResponse(404, "The requested file could not be found.");
+		}
 	}
 	else
 	{
 		mResponseObj.parseRangeHeader(mParser);
-		mResponse = mResponseObj.buildResponse(mParser.getUri());
+		mResponseObj.buildResponse(mParser.getUri());
 	}
 	mKeepAlive = mParser.getKeepAliveRequest();
-	mResponseReady = true;
-	mBytesSent = 0;
+	mResponseObj.mResponseReady = true;
 	return (true);
 }
 
@@ -287,8 +294,10 @@ bool ClientHandler::sendResponse()
 
 	if (mIsCgi == true && mIsCgiDone == false)
 		return (false);
-	bytes = send(
-		mSocketFd, mResponse.c_str() + mBytesSent, mResponse.size() - mBytesSent, MSG_NOSIGNAL);
+	bytes = send(mSocketFd,
+				 mResponseObj.mResponse.c_str() + mBytesSent,
+				 mResponseObj.mResponse.size() - mBytesSent,
+				 MSG_NOSIGNAL);
 	if (bytes > 0)
 		mBytesSent += bytes;
 	else
@@ -303,12 +312,12 @@ bool ClientHandler::sendResponse()
 		LOG_NOTICE("sendResponse: client " + mClientIp + ", status " +
 				   numToString(mResponseObj.mStatus) + ", total size " + numToString(mBytesSent));
 	}
-	return mBytesSent == mResponse.size();
+	return mBytesSent == mResponseObj.mResponse.size();
 }
 
 std::string &ClientHandler::getResponse()
 {
-	return (this->mResponse);
+	return (this->mResponseObj.mResponse);
 }
 
 bool ClientHandler::getKeepAlive() const
