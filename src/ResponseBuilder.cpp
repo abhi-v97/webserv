@@ -16,7 +16,7 @@
 */
 
 ResponseBuilder::ResponseBuilder()
-	: mResponseReady(false), mResponseStream(), mMin(0), mMax(0), mStatus(200)
+	: mResponseReady(false), mNewSession(false), mResponseStream(), mMin(0), mMax(0), mStatus(200)
 {
 }
 
@@ -43,34 +43,20 @@ void ResponseBuilder::reset()
 	mMin = 0;
 	mMax = 0;
 	mResponseReady = false;
+	mNewSession = false;
 	mResponse.clear();
 	mResponseStream.clear();
 	mResponseStream.str("");
+	mSessionId.clear();
 }
 
 void ResponseBuilder::addCookies()
 {
-	std::string &cookies = mParser->getCookies();
-	size_t		 cookieStart = 0;
-	size_t		 cookieEnd = 0;
-
-	while (42 && cookies.empty() == false)
-	{
-		cookieStart = cookies.find_first_not_of("; ", cookieStart);
-		cookieEnd = cookies.find_first_of(';', cookieStart);
-		if (cookieStart == std::string::npos)
-			break;
-		std::string temp = cookies.substr(cookieStart, cookieEnd - cookieStart);
-		std::string cookieName = temp.substr(0, temp.find_first_of('='));
-		if (cookieName != "last-accessed" && cookieName != "total-requests")
-			mResponseStream << "set-cookie: " << temp << "\r\n";
-		if (temp.empty())
-			break;
-		temp.clear();
-		cookieStart = cookieEnd;
-	}
-	mResponseStream << "set-cookie: last-accessed=" << getTimestamp() << "\r\n";
-	mResponseStream << "set-cookie: total-requests=" << mParser->getRequestCount() << "\r\n";
+	mResponseStream << "Set-Cookie: last-accessed=" << getTimestamp() << "; Path=/;\r\n";
+	mResponseStream << "Set-Cookie: total-requests=" << mParser->getRequestCount()
+					<< "; Path=/;\r\n";
+	if (mNewSession == true)
+		mResponseStream << "Set-Cookie: session=" << mSessionId << "; Path=/;\r\n";
 }
 
 // simple response to a GET request
@@ -99,7 +85,7 @@ void ResponseBuilder::buildResponse(const std::string &uri)
 	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
 	addCookies();
 	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(uri)
-			  << "\r\nAccept-Ranges: bytes\r\n";
+					<< "\r\nAccept-Ranges: bytes\r\n";
 
 	if (mMax == 0)
 		mMax = body.str().size() - 1;
@@ -107,7 +93,8 @@ void ResponseBuilder::buildResponse(const std::string &uri)
 	if (mStatus == 206)
 	{
 		std::string newbody = body.str().substr(mMin, mMax - mMin + 1);
-		mResponseStream << "Content-Range: bytes " << mMin << "-" << mMax << "/" << body.str().size();
+		mResponseStream << "Content-Range: bytes " << mMin << "-" << mMax << "/"
+						<< body.str().size();
 		mResponseStream << "\r\nContent-Length: " << mMax - mMin + 1;
 		mResponseStream << "\r\n\r\n" << newbody;
 	}
@@ -132,9 +119,9 @@ bool ResponseBuilder::readCgiResponse(int pipeOutFd)
 		body << buffer;
 		len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	}
-	mResponseStream << "HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: " << body.str().size()
-			  << "\r\n\r\n"
-			  << body.str();
+	mResponseStream << "HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: "
+					<< body.str().size() << "\r\n\r\n"
+					<< body.str();
 	std::cout << mResponseStream.str() << std::endl;
 
 	// returns true if len isn't positive, meaning read is finished
@@ -164,21 +151,29 @@ void ResponseBuilder::parseRangeHeader(RequestParser &parser)
 	}
 }
 
+// TODO: add connection: close in response header when applicable
 // TODO: add a function that writes the name of the error code based on what error occurred next to
 // the Error code, so for 404 it returns "Not Found", for 500 its "Internal Server Error"
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
 void ResponseBuilder::buildErrorResponse(int code, const std::string &errorMsg)
 {
 	mResponseStream << "HTTP/1.1 " << numToString(code)
-		 << "\r\nContent-Type: text/html\r\nContent-Length: " << numToString(80 + errorMsg.size())
-		 << "\r\n\r\n<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
-		 << numToString(code) << "</h2><p> " << errorMsg << "</p></html>";
-	mResponseReady = true;
+					<< "\r\nContent-Type: text/html\r\nContent-Length: "
+					<< numToString(80 + errorMsg.size())
+					<< "\r\n\r\n<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
+					<< numToString(code) << "</h2><p> " << errorMsg << "</p></html>";
 	mStatus = code;
 	mResponse = mResponseStream.str();
+	mResponseReady = true;
 }
 
 int ResponseBuilder::getStatus()
 {
 	return (mStatus);
+}
+
+void ResponseBuilder::setSessionId(const std::string &id)
+{
+	mSessionId = id;
+	mNewSession = true;
 }

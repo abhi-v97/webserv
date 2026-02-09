@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstring>
 #include <sstream>
+#include <string>
 
 #include "configParser.hpp"
 
@@ -23,15 +24,18 @@ public:
 	bool		readCgiResponse(int pipeOutFd);
 	void		parseRangeHeader(RequestParser &parser);
 	void		setError(int code, const std::string &error);
+	void		setSessionId(const std::string &id);
 	int			getStatus();
 	std::string getResponse();
 	void		reset();
 
 	bool		   mResponseReady;
+	bool		   mNewSession;
 	size_t		   mMin;
 	size_t		   mMax;
 	size_t		   mStatus;
 	std::string	   mResponse;
+	std::string	   mSessionId;
 	RequestParser *mParser;
 	ServerConfig  *mConfig;
 

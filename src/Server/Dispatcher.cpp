@@ -193,12 +193,12 @@ Session *Dispatcher::addSession(std::string sessionId)
 	return (newSession);
 }
 
-Session *Dispatcher::getSession(std::string sessionId)
+Session *Dispatcher::getSession(const std::string &sessionId)
 {
 	return (this->mSessions[sessionId]);
 }
 
-void Dispatcher::deleteSession(std::string &sessionId)
+void Dispatcher::deleteSession(const std::string &sessionId)
 {
 	delete mSessions[sessionId];
 	mSessions.erase(sessionId);

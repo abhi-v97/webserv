@@ -230,6 +230,7 @@ void ClientHandler::handleCookies()
 		}
 		else if (now - session->lastAccessed > 1800)
 		{
+			// TODO: maybe respond with a session timed out message?
 			mDispatch->deleteSession(id);
 		}
 		else
@@ -242,12 +243,15 @@ void ClientHandler::handleCookies()
 	if (sessIdStart != std::string::npos)
 	{
 		// TODO:: two sessions found...
+		return;
 	}
 	if (!sessionFound)
 	{
 		// create new sesh ID
-		std::string newId = generateId();
-		session = mDispatch->addSession(newId);
+		id = generateId();
+		session = mDispatch->addSession(id);
+		mResponseObj.setSessionId(id);
+		cookies.append("session=" + id);
 	}
 }
 
@@ -260,8 +264,8 @@ bool ClientHandler::generateResponse()
 		return (true);
 	if (mParser.getParsingFinished() == false)
 		return (false);
-	handleCookies();
 	// TODO:insert error checking ehre, don't post or delete or cgi if an error has been foudn
+	handleCookies();
 	if (mIsCgi)
 	{
 		mDispatch->createCgiHandler(this);

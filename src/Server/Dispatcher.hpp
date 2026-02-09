@@ -37,8 +37,8 @@ public:
 	void createCgiHandler(ClientHandler *client);
 	void removeClient(int fd);
 	Session *addSession(std::string sessionId);
-	Session *getSession(std::string sessionId);
-	void deleteSession(std::string &sessionId);
+	Session *getSession(const std::string &sessionId);
+	void deleteSession(const std::string &sessionId);
 
 	void loop();
 
