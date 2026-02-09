@@ -122,7 +122,7 @@ bool ResponseBuilder::readCgiResponse(int pipeOutFd)
 	mResponseStream << "HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: "
 					<< body.str().size() << "\r\n\r\n"
 					<< body.str();
-	std::cout << mResponseStream.str() << std::endl;
+	// std::cout << mResponseStream.str() << std::endl;
 
 	// returns true if len isn't positive, meaning read is finished
 	return len <= 0;
@@ -147,7 +147,7 @@ void ResponseBuilder::parseRangeHeader(RequestParser &parser)
 
 		mMin = std::atoi(rangeStr.c_str() + equal + 1);
 		mMax = std::atoi(rangeStr.c_str() + dash + 1);
-		std::cout << "minStr: " << mMin << ", maxStr: " << mMax << std::endl;
+		// std::cout << "minStr: " << mMin << ", maxStr: " << mMax << std::endl;
 	}
 }
 

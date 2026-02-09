@@ -128,23 +128,19 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 	size_t		firstChar = rawFieldName.find_first_not_of(" \t");
 	size_t		lastChar = colonPos;
 	if (firstChar == colonPos)
-		return (false);
+		return (handleError(400, "Invalid HTTP header field"), false);
 
 	std::string fieldName = rawFieldName.substr(firstChar, lastChar - firstChar);
 	if (fieldName.find_first_of(" \t") != std::string::npos)
 		return (false);
 	for (std::string::iterator it = fieldName.begin(); it != fieldName.end(); it++)
-	{
 		*it = std::tolower(static_cast<unsigned char>(*it));
-	}
 
 	size_t		fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
 	size_t		fieldValueEnd = buffer.find_last_not_of("\r\n");
 	std::string fieldValue = buffer.substr(fieldValueStart, fieldValueEnd - fieldValueStart + 1);
 	if (fieldName == "cookie")
-	{
 		mCookies += fieldValue + "; ";
-	}
 	if (fieldValueStart == std::string::npos || fieldValueStart > fieldValueEnd)
 		mHeaderField[fieldName] = "";
 	else
@@ -252,7 +248,7 @@ bool RequestParser::parseBody(std::string &request)
 		int flags = O_WRONLY | O_CREAT | O_TRUNC;
 		bodyFd = open(tempFile.c_str(), flags, 0644);
 		if (bodyFd < 0)
-			return (false);
+			return (handleError(500, "Failed to create the requested resource"), false);
 		setNonBlockingFlag(bodyFd);
 	}
 
@@ -266,7 +262,7 @@ bool RequestParser::parseBody(std::string &request)
 		size_t	toWrite = std::min(available, bodyExpected - bodyReceived);
 		ssize_t bytesWritten = write(bodyFd, request.data(), toWrite);
 		if (bytesWritten < 0)
-			return (false);
+			return (handleError(500, "Failed to write to requested resource"), false);
 		bodyReceived += static_cast<size_t>(bytesWritten);
 		mParsePos = bodyStart + bytesWritten;
 	}

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <netinet/in.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
@@ -59,14 +60,14 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 			LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig->serverName +
 								   ", request: \"" + mParser.getRequestHeader() + "\""));
 			pollStruct.events |= POLLOUT;
-			generateResponse();
+			// generateResponse();
 		}
 	}
 	else if (pollStruct.revents & POLLOUT)
 	{
-		if (this->generateResponse() == true)
+		if (generateResponse() == true)
 		{
-			if (this->sendResponse() == true)
+			if (sendResponse() == true)
 			{
 				mRequestNum++;
 				mBytesSent = 0;
@@ -76,6 +77,7 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 			}
 			return;
 		}
+		// remove POLLOUT if you failed to generate a valid response
 		pollStruct.events &= ~POLLOUT;
 	}
 }
@@ -135,7 +137,7 @@ bool isCgi(std::string &uri)
 	return (false);
 }
 
-bool ClientHandler::writePost(std::string &uri, LocationConfig loc)
+bool ClientHandler::writePost(const std::string &uri, LocationConfig loc)
 {
 	std::string file = loc.root + uri;
 	std::string temp = mParser.getPostFile();
@@ -154,7 +156,7 @@ bool ClientHandler::writePost(std::string &uri, LocationConfig loc)
 	return (true);
 }
 
-bool ClientHandler::deleteMethod(std::string &uri, LocationConfig loc)
+bool ClientHandler::deleteMethod(const std::string &uri, LocationConfig loc)
 {
 	std::string file = loc.root + uri;
 
@@ -171,7 +173,7 @@ bool ClientHandler::deleteMethod(std::string &uri, LocationConfig loc)
 	return (true);
 }
 
-bool ClientHandler::checkUri(std::string &uri)
+bool ClientHandler::validateUri(std::string &uri)
 {
 	std::vector<LocationConfig> &locs = this->mConfig->locations;
 
@@ -184,30 +186,32 @@ bool ClientHandler::checkUri(std::string &uri)
 	{
 		if (folder == locs[j].path)
 		{
-			if (mParser.getMethod() == POST)
-			{
-				for (int k = 0; k < locs[j].methods.size(); k++)
-				{
-					if (locs[j].methods[k] == "POST" && writePost(uri, locs[j]))
-						return (true);
-				}
-			}
-			else if (mParser.getMethod() == DELETE)
-			{
-				for (int l = 0; l < locs[j].methods.size(); l++)
-				{
-					if (locs[j].methods[l] == "DELETE" && deleteMethod(uri, locs[j]))
-						return (true);
-				}
-			}
-			else
-				return (true);
+			return (executeMethod(uri, mParser.getMethod(), locs[j]));
 		}
 	}
-	if (mResponseObj.mStatus < 400)
+	return (false);
+}
+
+bool ClientHandler::executeMethod(const std::string &uri, RequestMethod method, LocationConfig &loc)
+{
+	std::string methodStr;
+
+	if (method == POST)
+		methodStr = "POST";
+	else if (method == DELETE)
+		methodStr = "DELETE";
+	for (int i = 0; i < loc.methods.size(); i++)
 	{
-		// TODO
+		if (loc.methods[i] == methodStr)
+			break;
 	}
+	if (find(loc.methods.begin(), loc.methods.end(), methodStr) == loc.methods.end())
+	{
+		//  method not found
+		return (false);
+	}
+	if ((method == POST && writePost(uri, loc)) || (method == DELETE && deleteMethod(uri, loc)))
+		return (true);
 	return (false);
 }
 
@@ -270,7 +274,7 @@ bool ClientHandler::generateResponse()
 	{
 		mDispatch->createCgiHandler(this);
 	}
-	else if (checkUri(mParser.getUri()) == false)
+	else if (validateUri(mParser.getUri()) == false)
 	{
 		// mResponseObj.setError(404, "Page not found!");
 		if (mConfig->errorPages.find(404) != mConfig->errorPages.end())

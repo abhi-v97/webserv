@@ -43,8 +43,8 @@ public:
 	void setCgiFd(int pipeFd);
 	void setCgiReady(bool status);
 	void handleEvents(struct pollfd &pollStruct);
-	bool writePost(std::string &uri, LocationConfig loc);
-	bool deleteMethod(std::string &uri, LocationConfig loc);
+	bool writePost(const std::string &uri, LocationConfig loc);
+	bool deleteMethod(const std::string &uri, LocationConfig loc);
 	void handleCookies();
 
 	bool		 getKeepAlive() const;
@@ -56,5 +56,6 @@ private:
 	bool parseRequest();
 	bool sendResponse();
 	bool generateResponse();
-	bool checkUri(std::string &uri);
+	bool validateUri(std::string &uri);
+	bool executeMethod(const std::string &uri, RequestMethod method, LocationConfig &loc);
 };
