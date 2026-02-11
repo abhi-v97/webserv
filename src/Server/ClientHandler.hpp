@@ -11,6 +11,7 @@
 #include "configParser.hpp"
 
 class Dispatcher;
+struct Session;
 
 /**
 	\class ClientHandler
@@ -32,12 +33,13 @@ public:
 	RequestParser	mParser;
 	ResponseBuilder mResponseObj;
 	CgiHandler	   *mCgiObj;
+	Session		   *mSession;
 	bool			mIsCgi;
 	bool			mIsCgiDone;
 	Dispatcher	   *mDispatch;
 	int				mPipeFd;
 	int				mRequestNum;
-	ServerConfig	*mConfig;
+	ServerConfig   *mConfig;
 
 	bool acceptSocket(int listenFd, ServerConfig *srv, Dispatcher *dispatch);
 	void setCgiFd(int pipeFd);
@@ -45,7 +47,7 @@ public:
 	void handleEvents(struct pollfd &pollStruct);
 	bool writePost(const std::string &uri, LocationConfig loc);
 	bool deleteMethod(const std::string &uri, LocationConfig loc);
-	void handleCookies();
+	void setSession();
 
 	bool		 getKeepAlive() const;
 	int			 getFd() const;
@@ -57,5 +59,7 @@ private:
 	bool sendResponse();
 	bool generateResponse();
 	bool validateUri(std::string &uri);
-	bool executeMethod(const std::string &uri, RequestMethod method, LocationConfig &loc);
+	bool checkMethod(const std::string &uri, RequestMethod method, const LocationConfig &loc);
+	bool checkPermissions(const std::string &uri, RequestMethod method);
+	bool validateRequest(std::string &uri, const LocationConfig &loc, RequestMethod method);
 };

@@ -8,6 +8,7 @@
 #include "ClientHandler.hpp"
 #include "Dispatcher.hpp"
 #include "Logger.hpp"
+#include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
 #include "Utils.hpp"
 #include "configParser.hpp"
@@ -68,6 +69,7 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 		{
 			if (sendResponse() == true)
 			{
+				mKeepAlive = mParser.getKeepAliveRequest();
 				mRequestNum++;
 				mBytesSent = 0;
 				mParser.reset();
@@ -140,11 +142,10 @@ bool isCgi(std::string &uri)
 
 bool ClientHandler::writePost(const std::string &uri, LocationConfig loc)
 {
-	std::string file = loc.root + uri;
 	std::string temp = mParser.getPostFile();
 
 	std::ifstream inf(temp.c_str());
-	std::ofstream out(file.c_str(), std::ios::app);
+	std::ofstream out(uri.c_str(), std::ios::app);
 	if (!inf || !out)
 	{
 		// mResponseObj.setError(500, "Internal Server Error: failed to write POST message");
@@ -158,16 +159,50 @@ bool ClientHandler::writePost(const std::string &uri, LocationConfig loc)
 
 bool ClientHandler::deleteMethod(const std::string &uri, LocationConfig loc)
 {
-	std::string file = loc.root + uri;
-
-	if (access(file.c_str(), W_OK))
-	{
-		// TODO: insert no permission error msg nhere
-		return (false);
-	}
-	if (remove(file.c_str()))
+	if (remove(uri.c_str()))
 	{
 		// mResponseObj.setError(500, "Internal Server Error: Failed to remove the file");
+		return (false);
+	}
+	return (true);
+}
+
+/**
+	\brief checks the full uri if the file has correct permissions
+
+	\param uri must be the full path of the uri
+	\param method request method
+*/
+bool ClientHandler::checkPermissions(const std::string &uri, RequestMethod method)
+{
+	if (access(uri.c_str(), F_OK))
+	{
+		if (method == GET || method == DELETE)
+		{
+			mResponseObj.buildErrorResponse(404, "Page not found");
+			return (false);
+		}
+		else if (method == POST)
+		{
+			// POST method, okay if file doesn't exist
+			mResponseObj.mStatus = 201;
+			return (true);
+		}
+	}
+	else if (method == GET && access(uri.c_str(), R_OK))
+	{
+		// TODO: test, see what nginx does whena requested file has no read permission
+		mResponseObj.buildErrorResponse(403, "Failed to read resource");
+		return (false);
+	}
+	else if (method == DELETE && access(uri.c_str(), W_OK))
+	{
+		mResponseObj.buildErrorResponse(403, "Failed to delete resource");
+		return (false);
+	}
+	else if (mIsCgi == true && access(uri.c_str(), X_OK))
+	{
+		mResponseObj.buildErrorResponse(403, "Failed to execute resource");
 		return (false);
 	}
 	return (true);
@@ -185,12 +220,37 @@ bool ClientHandler::validateUri(std::string &uri)
 	for (int j = 0; j < locs.size(); j++)
 	{
 		if (folder == locs[j].path)
-			return (executeMethod(uri, mParser.getMethod(), locs[j]));
+		{
+			uri = locs[j].root + uri;
+
+			return (validateRequest(uri, locs[j], mParser.getMethod()));
+		}
 	}
 	return (false);
 }
 
-bool ClientHandler::executeMethod(const std::string &uri, RequestMethod method, LocationConfig &loc)
+bool ClientHandler::validateRequest(std::string			 &uri,
+									const LocationConfig &loc,
+									RequestMethod		  method)
+{
+
+	if (!checkPermissions(uri, method))
+		return (false);
+	if (!checkMethod(uri, method, loc))
+	{
+		mResponseObj.buildErrorResponse(403, "Method not allowed for this location");
+		return (false);
+	}
+	if (method == GET)
+		return (true);
+	if ((method == POST && writePost(uri, loc)) || (method == DELETE && deleteMethod(uri, loc)))
+		return (true);
+	return (false);
+}
+
+bool ClientHandler::checkMethod(const std::string	 &uri,
+								RequestMethod		  method,
+								const LocationConfig &loc)
 {
 	std::string methodStr;
 
@@ -206,18 +266,11 @@ bool ClientHandler::executeMethod(const std::string &uri, RequestMethod method, 
 			break;
 	}
 	if (find(loc.methods.begin(), loc.methods.end(), methodStr) == loc.methods.end())
-	{
-		//  method not found
 		return (false);
-	}
-	if (method == GET)
-		return (true);
-	if ((method == POST && writePost(uri, loc)) || (method == DELETE && deleteMethod(uri, loc)))
-		return (true);
-	return (false);
+	return (true);
 }
 
-void ClientHandler::handleCookies()
+void ClientHandler::setSession()
 {
 	bool		 sessionFound = false;
 	std::string &cookies = mParser.getCookies();
@@ -233,6 +286,11 @@ void ClientHandler::handleCookies()
 		if (!session)
 		{
 			// TODO: check for invalid session ID
+		}
+		else if (session != mSession)
+		{
+			// TODO: wrong session ID provided, send an error and close connection
+			LOG_ERROR("Session id mismatch");
 		}
 		else if (now - session->lastAccessed > 1800)
 		{
@@ -256,6 +314,7 @@ void ClientHandler::handleCookies()
 		// create new sesh ID
 		id = generateId();
 		session = mDispatch->addSession(id);
+		mSession = session;
 		mResponseObj.setSessionId(id);
 		cookies.append("session=" + id);
 	}
@@ -270,31 +329,14 @@ bool ClientHandler::generateResponse()
 		return (true);
 	if (mParser.getParsingFinished() == false)
 		return (false);
-	// TODO:insert error checking ehre, don't post or delete or cgi if an error has been foudn
-	handleCookies();
+	setSession();
 	if (mIsCgi)
-	{
 		mDispatch->createCgiHandler(this);
-	}
-	else if (validateUri(mParser.getUri()) == false)
-	{
-		// mResponseObj.setError(404, "Page not found!");
-		if (mConfig->errorPages.find(404) != mConfig->errorPages.end())
-		{
-			mResponseObj.buildResponse(mConfig->root.append(mConfig->errorPages[404]));
-		}
-		else
-		{
-			mResponseObj.buildErrorResponse(404, "The requested file could not be found.");
-		}
-	}
-	else
+	else if (validateUri(mParser.getUri()))
 	{
 		mResponseObj.parseRangeHeader(mParser);
 		mResponseObj.buildResponse(mParser.getUri());
 	}
-	mKeepAlive = mParser.getKeepAliveRequest();
-	mResponseObj.mResponseReady = true;
 	return (true);
 }
 
@@ -304,10 +346,20 @@ bool ClientHandler::sendResponse()
 
 	if (mIsCgi == true && mIsCgiDone == false)
 		return (false);
-	bytes = send(mSocketFd,
-				 mResponseObj.mResponse.c_str() + mBytesSent,
-				 mResponseObj.mResponse.size() - mBytesSent,
-				 MSG_NOSIGNAL);
+	if (mIsCgi == true)
+	{
+		bytes = send(mSocketFd,
+					 mResponseObj.mResponse.c_str() + mBytesSent,
+					 mResponseObj.mResponse.size() - mBytesSent,
+					 MSG_NOSIGNAL);
+	}
+	else
+	{
+		bytes = send(mSocketFd,
+					 mResponseObj.mResponse.c_str() + mBytesSent,
+					 mResponseObj.mResponse.size() - mBytesSent,
+					 MSG_NOSIGNAL);
+	}
 	if (bytes > 0)
 		mBytesSent += bytes;
 	else

@@ -70,10 +70,7 @@ void ResponseBuilder::addCookies()
 void ResponseBuilder::buildResponse(const std::string &uri)
 {
 	std::ostringstream body;
-	std::string		   file = mConfig->root;
-	file.append(uri);
-
-	std::ifstream requestFile(file.c_str());
+	std::ifstream requestFile(uri.c_str());
 
 	// if the requested file is not found
 	if (requestFile.good() == false)
@@ -98,12 +95,13 @@ void ResponseBuilder::buildResponse(const std::string &uri)
 		mResponseStream << "\r\nContent-Length: " << mMax - mMin + 1;
 		mResponseStream << "\r\n\r\n" << newbody;
 	}
-	else
+	else if (mParser->getMethod() == GET)
 	{
 		mResponseStream << "Content-Length: " << body.str().size();
 		mResponseStream << "\r\n\r\n" << body.str();
 	}
 	mResponse = mResponseStream.str();
+	mResponseReady = true;
 }
 
 bool ResponseBuilder::readCgiResponse(int pipeOutFd)
@@ -136,7 +134,6 @@ void ResponseBuilder::parseRangeHeader(RequestParser &parser)
 
 	if (rangeStr.empty())
 	{
-		mStatus = 200;
 		return;
 	}
 	else
