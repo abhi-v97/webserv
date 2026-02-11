@@ -60,7 +60,6 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 			LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig->serverName +
 								   ", request: \"" + mParser.getRequestHeader() + "\""));
 			pollStruct.events |= POLLOUT;
-			// generateResponse();
 		}
 	}
 	else if (pollStruct.revents & POLLOUT)
@@ -82,6 +81,7 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 	}
 }
 
+// TODO: add logic for string.reserve to prevent repeat allocs
 void ClientHandler::readSocket()
 {
 	char	buffer[4096];
@@ -130,6 +130,7 @@ bool ClientHandler::parseRequest()
 	return (mParser.getParsingFinished());
 }
 
+// TODO: replace this with a config file setting, use shebang line to execute the file
 bool isCgi(std::string &uri)
 {
 	if (uri.find(".py") != std::string::npos || uri.find(".sh") != std::string::npos)
@@ -143,7 +144,6 @@ bool ClientHandler::writePost(const std::string &uri, LocationConfig loc)
 	std::string temp = mParser.getPostFile();
 
 	std::ifstream inf(temp.c_str());
-
 	std::ofstream out(file.c_str(), std::ios::app);
 	if (!inf || !out)
 	{
@@ -185,9 +185,7 @@ bool ClientHandler::validateUri(std::string &uri)
 	for (int j = 0; j < locs.size(); j++)
 	{
 		if (folder == locs[j].path)
-		{
 			return (executeMethod(uri, mParser.getMethod(), locs[j]));
-		}
 	}
 	return (false);
 }
@@ -200,6 +198,8 @@ bool ClientHandler::executeMethod(const std::string &uri, RequestMethod method, 
 		methodStr = "POST";
 	else if (method == DELETE)
 		methodStr = "DELETE";
+	else if (method == GET)
+		methodStr = "GET";
 	for (int i = 0; i < loc.methods.size(); i++)
 	{
 		if (loc.methods[i] == methodStr)
@@ -210,6 +210,8 @@ bool ClientHandler::executeMethod(const std::string &uri, RequestMethod method, 
 		//  method not found
 		return (false);
 	}
+	if (method == GET)
+		return (true);
 	if ((method == POST && writePost(uri, loc)) || (method == DELETE && deleteMethod(uri, loc)))
 		return (true);
 	return (false);

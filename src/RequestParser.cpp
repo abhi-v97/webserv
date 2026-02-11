@@ -21,6 +21,7 @@ RequestParser::~RequestParser()
 {
 }
 
+// TODO: refactor, add logic to reduce amount of erases
 bool RequestParser::parse(std::string &requestBuffer)
 {
 	std::string buffer;
