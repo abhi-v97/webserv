@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>400 Bad Request</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(
+                270deg,
+                #ff0000,
+                #ff7f00,
+                #ffff00,
+                #00ff00,
+                #0000ff,
+                #4b0082,
+                #8b00ff
+            );
+            background-size: 1400% 1400%;
+            animation: rainbow 12s ease infinite;
+            color: white;
+            text-align: center;
+        }
+
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            background: rgba(0, 0, 0, 0.45);
+            padding: 40px 60px;
+            border-radius: 12px;
+        }
+
+        h1 {
+            font-size: 70px;
+            margin: 0;
+        }
+
+        p {
+            font-size: 20px;
+            margin-top: 10px;
+        }
+
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            color: #fff;
+            text-decoration: underline;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>400</h1>
+        <p>Bad Request</p>
+        <p>Your request could not be understood by the server ❌</p>
+        <a href="/">Go to Home</a>
+    </div>
+</body>
+</html>
