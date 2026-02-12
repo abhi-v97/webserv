@@ -1,5 +1,5 @@
 #include <iostream>
-#include "configParser.hpp"
+#include "../configParser.hpp"
 
 static void printLocation(const LocationConfig &loc)
 {
@@ -20,7 +20,7 @@ int main(int argc, char **argv)
     try {
         configParser parser(cfg);
         std::cout << "Servers parsed: " << parser.servers.size() << "\n";
-        for (size_t i = 1; i < parser.servers.size(); ++i) {
+        for (size_t i = 0; i < parser.servers.size(); ++i) {
             const ServerConfig &s = parser.servers[i];
             std::cout << "Server " << i << ":\n";
             std::cout << " serverName=" << s.serverName << "\n";
