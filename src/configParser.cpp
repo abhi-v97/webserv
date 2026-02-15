@@ -64,96 +64,112 @@ ServerConfig	configParser::parseServerBlock()
 	while (current.type != RBRACE && current.type != END)
 	{
 		if (current.type == WORD && current.value == "listen")
-		{
-			advance();
-			std::stringstream ss(current.value);
-			ss >> port;
-			if (current.type != WORD)
-				throw std::runtime_error("Expected port number");
-			cfg.listenPorts.push_back(port);
-			advance();
-			expect(SEMICOLON);
-		}
+			configParser::parseListen(cfg, port);
 		else if (current.type == WORD && current.value == "root")
-		{
-			advance();
-			if (current.type != WORD)
-				throw std::runtime_error("Expected root path");
-			cfg.root = current.value;
-			advance();
-			expect(SEMICOLON);
-		}
+			configParser::parseRootDirective(cfg);
 		else if (current.type == WORD && current.value == "server_name")
-		{
-			advance();
-			if (current.type != WORD)
-				throw std::runtime_error("Expected server name");
-			cfg.serverName = current.value;
-			advance();
-			expect(SEMICOLON);
-		}
+			configParser::parseServerName(cfg);
 		else if (current.value == "location")
 		{
 			LocationConfig loc = parseLocationBlock();
 			cfg.locations.push_back(loc);
 		}
 		else if (current.type == WORD && current.value == "error_page")
-		{
-			advance();
-			if (current.type != WORD)
-				throw std::runtime_error("Expected error code");
-			int	code;
-			code = 0;
-			std::stringstream ss(current.value);
-			ss >> code;
-			advance();
-			if (current.type != WORD)
-				throw std::runtime_error("Expected error page path");
-			std::string path = current.value;
-			advance();
-			expect(SEMICOLON);
-			cfg.errorPages[code] = path;
-		}
+			configParser::parseErrorPage(cfg);
 		else if (current.type == WORD && current.value == "client_max_body_size")
-		{
-			advance();
-			if (current.type != WORD)
-	   			throw std::runtime_error("Expected max body size value");
-			std::string val = current.value;
-			char unit = val[val.size() - 1];
-			long multiplier = 1;
-			if (unit == 'K' || unit == 'k')
-			{
-				multiplier = 1024;
-				val = val.substr(0, val.size() - 1);
-			}
-			else if (unit == 'M' || unit == 'm')
-			{
-				multiplier = 1024 * 1024;
-				val = val.substr(0, val.size() - 1);
-			}
-			else if (unit == 'G' || unit == 'g')
-			{
-				multiplier = 1024 * 1024 * 1024;
-				val = val.substr(0, val.size() - 1);
-			}
-			else if (!isdigit(unit))
-				throw std::runtime_error("Invalid size format for client_max_body_size");
-			std::stringstream ss(val);
-			long number;
-			ss >> number;
-			if (ss.fail() || number < 0)
-				throw std::runtime_error("Invalid number in client_max_body_size");
-			cfg.clientMaxBodySize = number * multiplier;
-			std::cout << cfg.clientMaxBodySize << std::endl; 
-			advance();
-			expect(SEMICOLON);
-		}
-	else
-		throw std::runtime_error("Unknown directive: " + current.value);
-}
+			configParser::parseClientMaxBodySize(cfg);
+		else
+			throw std::runtime_error("Unknown directive: " + current.value);
+	}
 	expect(RBRACE);
 	return (cfg);
+}
+
+void configParser::parseClientMaxBodySize(ServerConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected max body size value");
+	std::string val = current.value;
+	char unit = val[val.size() - 1];
+	long multiplier = 1;
+	if (unit == 'K' || unit == 'k')
+	{
+		multiplier = 1024;
+		val = val.substr(0, val.size() - 1);
+	}
+	else if (unit == 'M' || unit == 'm')
+	{
+		multiplier = 1024 * 1024;
+		val = val.substr(0, val.size() - 1);
+	}
+	else if (unit == 'G' || unit == 'g')
+	{
+		multiplier = 1024 * 1024 * 1024;
+		val = val.substr(0, val.size() - 1);
+	}
+	else if (!isdigit(unit))
+		throw std::runtime_error("Invalid size format for client_max_body_size");
+	std::stringstream ss(val);
+	long number;
+	ss >> number;
+	if (ss.fail() || number < 0)
+		throw std::runtime_error("Invalid number in client_max_body_size");
+	cfg.clientMaxBodySize = number * multiplier;
+	std::cout << cfg.clientMaxBodySize << std::endl; 
+	advance();
+	expect(SEMICOLON);
+}
+
+void configParser::parseErrorPage(ServerConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected error code");
+	int	code;
+	code = 0;
+	std::stringstream ss(current.value);
+	ss >> code;
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected error page path");
+	std::string path = current.value;
+	advance();
+	expect(SEMICOLON);
+	cfg.errorPages[code] = path;
+}
+
+void	configParser::parseListen(ServerConfig &cfg, int &port)
+{
+	LocationConfig loc;
+	advance();
+	std::stringstream ss(current.value);
+	ss >> port;
+	if (current.type != WORD)
+		throw std::runtime_error("Expected port number");
+	cfg.listenPorts.push_back(port);
+	advance();
+	expect(SEMICOLON);
+}
+
+void	configParser::parseRootDirective(ServerConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected root path");
+	cfg.root = current.value;
+	advance();
+	expect(SEMICOLON);
+}
+
+void configParser::parseServerName(ServerConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected server name");
+	cfg.serverName = current.value;
+	advance();
+	expect(SEMICOLON);
 }
 
 void	configParser::parseConfig()

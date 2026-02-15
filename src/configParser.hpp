@@ -40,6 +40,11 @@ class configParser {
 		void				expect(configTokenType type);
 		LocationConfig		parseLocationBlock();
 		ServerConfig		parseServerBlock();
+		void				parseErrorPage(ServerConfig &cfg);
+		void				parseClientMaxBodySize(ServerConfig &cfg);
+		void				parseListen(ServerConfig &cfg, int &port);
+		void				parseRootDirective(ServerConfig &cfg);
+		void				parseServerName(ServerConfig &cfg);
 		void				parseConfig();
 		std::string			readFile(const std::string &filename);
 
