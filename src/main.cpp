@@ -22,10 +22,10 @@ int main(int argc, char **argv)
 	{
 		std::vector<int> &ports = (*serverIter).listenPorts;
 		for (std::vector<int>::iterator portIter = ports.begin(); portIter != ports.end(); portIter++)
-			dispatch.createListener(*portIter, *serverIter);
+			dispatch.createAcceptor(*portIter, *serverIter);
 	}
 
-	if (dispatch.setListeners() == false)
+	if (dispatch.setAcceptors() == false)
 		return (1);
 
 	// load supported types

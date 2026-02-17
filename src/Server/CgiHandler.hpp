@@ -1,5 +1,5 @@
 #ifndef CGIHANDLER_HPP
-# define CGIHANDLER_HPP
+#define CGIHANDLER_HPP
 
 #include <cstdlib>
 #include <iostream>
@@ -11,7 +11,7 @@
 #include "IHandler.hpp"
 #include "configParser.hpp"
 
-class ClientHandler;
+class WriteHandler;
 
 enum CgiType
 {
@@ -23,7 +23,7 @@ enum CgiType
 class CgiHandler: public IHandler
 {
 public:
-	CgiHandler(ClientHandler *client);
+	CgiHandler(WriteHandler *client);
 	CgiHandler(const CgiHandler &src);
 	~CgiHandler();
 
@@ -39,7 +39,7 @@ private:
 	pid_t							   m_PID;
 	int								   m_fd[2];
 	CgiType							   mType;
-	ClientHandler					  *mClient;
+	WriteHandler					  *mClient;
 	std::string						   mCgiBody;
 	ssize_t							   mBodySize;
 

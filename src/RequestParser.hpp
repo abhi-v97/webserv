@@ -9,7 +9,7 @@
 
 #define INVALID_METHOD "Unknown method provided in request header"
 
-class ClientHandler;
+class ReadHandler;
 
 enum RequestMethod
 {
@@ -41,7 +41,7 @@ public:
 	size_t								getContentLength();
 	bool								getParsingFinished() const;
 	bool								getKeepAliveRequest();
-	std::string							getPostFile();
+	std::string const &getBodyFile() const;
 	int									getRequestCount();
 	void								setHeaderEnd(const size_t &headerEnd);
 	bool								parse(std::string &requestBuffer);
@@ -49,7 +49,7 @@ public:
 	std::string						   &getCookies();
 	void								reset();
 	ResponseBuilder					   *mResponse;
-	ClientHandler					   *mClient;
+	ReadHandler					   *mClient;
 
 private:
 	bool parseHeader(const std::string &header);
@@ -64,7 +64,7 @@ private:
 	std::string						   mRequestUri;
 	std::string						   mHttpVersion;
 	std::string						   mRequestHeader;
-	std::string						   tempFile;
+	std::string						   mTempPostFile;
 	std::string						   mCookies;
 	std::map<std::string, std::string> mHeaderField;
 	bool							   bodyToFile;

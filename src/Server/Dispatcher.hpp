@@ -6,8 +6,8 @@
 #include <sys/poll.h>
 #include <vector>
 
-#include "ClientHandler.hpp"
 #include "IHandler.hpp"
+#include "ReadHandler.hpp"
 #include "configParser.hpp"
 
 struct Session
@@ -31,14 +31,15 @@ public:
 	Dispatcher();
 	~Dispatcher();
 
-	bool setListeners();
-	void createListener(int port, ServerConfig srv);
-	void createClient(int listenFd, ServerConfig *srv);
-	void createCgiHandler(ClientHandler *client);
-	void removeClient(int fd);
+	bool	 setAcceptors();
+	void	 createAcceptor(int port, ServerConfig srv);
+	void	 createReadHandler(int socketFd, ServerConfig *srv, Acceptor *acceptor);
+	void	 createWriteHandler(int socketFd, RequestParser &requestObj, ServerConfig *srv);
+	void	 createCgiHandler(WriteHandler *client);
+	void	 removeClient(int fd);
 	Session *addSession(std::string sessionId);
 	Session *getSession(const std::string &sessionId);
-	void deleteSession(const std::string &sessionId);
+	void	 deleteSession(const std::string &sessionId);
 
 	void loop();
 

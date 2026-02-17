@@ -10,7 +10,7 @@
 
 class RequestParser;
 
-// TODO: instead of clientHandler accessing the response through mResponse, maybe just pass
+// TODO: instead of ReadHandler accessing the response through mResponse, maybe just pass
 // mResponseStream instead?
 
 class ResponseBuilder

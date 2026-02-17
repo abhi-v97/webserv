@@ -1,80 +1,29 @@
-#include <algorithm>
-#include <netinet/in.h>
-#include <sys/poll.h>
-#include <sys/socket.h>
-#include <unistd.h>
-
-#include "CgiHandler.hpp"
-#include "ClientHandler.hpp"
-#include "Dispatcher.hpp"
-#include "Logger.hpp"
 #include "RequestParser.hpp"
-#include "ResponseBuilder.hpp"
 #include "Utils.hpp"
+#include "WriteHandler.hpp"
 #include "configParser.hpp"
+#include "Logger.hpp"
+#include <algorithm>
 
-ClientHandler::ClientHandler()
-	: mSocketFd(-1), mRequest(), mClientIp(), mBytesSent(0), mBytesRead(0), mParser(),
-	  mResponseObj(), mCgiObj(), mIsCgi(false), mIsCgiDone(false), mPipeFd(0), mRequestNum(0)
+WriteHandler::WriteHandler(int socketFd, RequestParser &requestObj, ServerConfig *srv) : mSocketFd(socketFd), mParser(requestObj), mConfig(srv)
 {
-	mParser.mResponse = &mResponseObj;
-	mResponseObj.mParser = &mParser;
-	mParser.mClient = this;
+	mKeepAlive = false;	
 }
 
-bool ClientHandler::acceptSocket(int listenFd, ServerConfig *srv, Dispatcher *dispatch)
+void WriteHandler::handleEvents(struct pollfd &pollStruct)
 {
-	struct sockaddr_in clientAddr = {};
-	socklen_t		   clientLen = sizeof(clientAddr);
-	std::ostringstream ipStream;
-
-	mSocketFd = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
-	if (mSocketFd < 0)
-		return (LOG_ERROR(std::string("acceptSocket(): ") + std::strerror(errno)), false);
-
-	// get client IP from sockaddr struct, store it as std::string
-	ipStream << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24);
-
-	mClientIp = ipStream.str();
-	mConfig = srv;
-	mResponseObj.mConfig = mConfig;
-	mDispatch = dispatch;
-	LOG_INFO(std::string("acceptSocket(): new client fd: ") + numToString(mSocketFd) +
-			 "; ip: " + mClientIp);
-	return (setNonBlockingFlag(mSocketFd));
-}
-
-ClientHandler::~ClientHandler()
-{
-}
-
-void ClientHandler::handleEvents(pollfd &pollStruct)
-{
-	if (pollStruct.revents & POLLIN && mParser.getParsingFinished() == false)
-	{
-		this->readSocket();
-		if (this->parseRequest() == true)
-		{
-			LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig->serverName +
-								   ", request: \"" + mParser.getRequestHeader() + "\""));
-			pollStruct.events |= POLLOUT;
-		}
-	}
-	else if (pollStruct.revents & POLLOUT)
+	if (pollStruct.revents & POLLOUT)
 	{
 		if (generateResponse() == true)
 		{
 			if (sendResponse() == true)
 			{
-				mKeepAlive = mParser.getKeepAliveRequest();
-				mRequestNum++;
+				// mKeepAlive = mParser.getKeepAliveRequest();
+				// mRequestNum++;
 				mBytesSent = 0;
-				mParser.reset();
+				// mParser.reset();
 				mResponseObj.reset();
-				parseRequest();
+				// parseRequest();
 			}
 			return;
 		}
@@ -83,54 +32,6 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 	}
 }
 
-// TODO: add logic for string.reserve to prevent repeat allocs
-void ClientHandler::readSocket()
-{
-	char	buffer[4096];
-	ssize_t bytesRead;
-
-	// don't read next data until you are finished with all requests from the previous read
-	if (mParser.getParsingFinished())
-		return;
-
-	bytesRead = recv(mSocketFd, buffer, 4096, 0);
-	if (bytesRead < 0)
-	{
-		LOG_WARNING(std::string("readSocket(): client " + numToString(mSocketFd)) +
-					": failed to read from socket");
-		return;
-	}
-	else if (bytesRead == 0)
-	{
-		LOG_NOTICE(std::string("readSocket(): client " + numToString(mSocketFd)) +
-				   ": zero bytes received, closing connection");
-		mKeepAlive = false;
-		return;
-	}
-	mRequest.append(buffer, bytesRead);
-}
-
-bool ClientHandler::parseRequest()
-{
-	if (mRequest.empty())
-		return (false);
-
-	if (mParser.parse(mRequest) == false)
-	{
-		// TODO: close the connection only for terrible requests
-		// if the request error was 400 (bad format) or 404 (file not found), there's no need to
-		// close the connection straight away
-		// close it for errors where we do not know where the next request may start on the socket
-		// stream, eg payload too large, 414 uri too long, or 408 request timeout (if implemented)
-
-		// LOG_ERROR(std::string("parseRequest(): client " + numToString(mSocketFd) +
-		// 					  ": invalid HTTP request, closing connection"));
-		// mKeepAlive = false;
-		// return (false);
-		mRequest.clear();
-	}
-	return (mParser.getParsingFinished());
-}
 
 // TODO: replace this with a config file setting, use shebang line to execute the file
 bool isCgi(std::string &uri)
@@ -140,11 +41,13 @@ bool isCgi(std::string &uri)
 	return (false);
 }
 
-bool ClientHandler::writePost(const std::string &uri, LocationConfig loc)
+bool WriteHandler::writePost(const std::string &uri, LocationConfig loc)
 {
-	std::string temp = mParser.getPostFile();
+	const std::string &bodyFile = mParser.getBodyFile();
 
-	std::ifstream inf(temp.c_str());
+	if (mHasBody == false)
+		return (true);
+	std::ifstream inf(bodyFile.c_str());
 	std::ofstream out(uri.c_str(), std::ios::app);
 	if (!inf || !out)
 	{
@@ -153,11 +56,11 @@ bool ClientHandler::writePost(const std::string &uri, LocationConfig loc)
 	}
 	out << inf.rdbuf();
 	out.close();
-	std::remove(temp.c_str());
+	std::remove(bodyFile.c_str());
 	return (true);
 }
 
-bool ClientHandler::deleteMethod(const std::string &uri, LocationConfig loc)
+bool WriteHandler::deleteMethod(const std::string &uri, LocationConfig loc)
 {
 	if (remove(uri.c_str()))
 	{
@@ -173,7 +76,7 @@ bool ClientHandler::deleteMethod(const std::string &uri, LocationConfig loc)
 	\param uri must be the full path of the uri
 	\param method request method
 */
-bool ClientHandler::checkPermissions(const std::string &uri, RequestMethod method)
+bool WriteHandler::checkPermissions(const std::string &uri, RequestMethod method)
 {
 	if (access(uri.c_str(), F_OK))
 	{
@@ -208,9 +111,9 @@ bool ClientHandler::checkPermissions(const std::string &uri, RequestMethod metho
 	return (true);
 }
 
-bool ClientHandler::validateUri(std::string &uri)
+bool WriteHandler::validateUri(std::string &uri)
 {
-	std::vector<LocationConfig> &locs = this->mConfig->locations;
+	std::vector<LocationConfig> &locs = mConfig->locations;
 
 	size_t folderEnd = uri.rfind('/');
 	if (folderEnd == std::string::npos || folderEnd == 0)
@@ -229,7 +132,7 @@ bool ClientHandler::validateUri(std::string &uri)
 	return (false);
 }
 
-bool ClientHandler::validateRequest(std::string			 &uri,
+bool WriteHandler::validateRequest(std::string			 &uri,
 									const LocationConfig &loc,
 									RequestMethod		  method)
 {
@@ -248,7 +151,7 @@ bool ClientHandler::validateRequest(std::string			 &uri,
 	return (false);
 }
 
-bool ClientHandler::checkMethod(const std::string	 &uri,
+bool WriteHandler::checkMethod(const std::string	 &uri,
 								RequestMethod		  method,
 								const LocationConfig &loc)
 {
@@ -270,7 +173,7 @@ bool ClientHandler::checkMethod(const std::string	 &uri,
 	return (true);
 }
 
-void ClientHandler::setSession()
+void WriteHandler::setSession()
 {
 	bool		 sessionFound = false;
 	std::string &cookies = mParser.getCookies();
@@ -320,7 +223,7 @@ void ClientHandler::setSession()
 	}
 }
 
-bool ClientHandler::generateResponse()
+bool WriteHandler::generateResponse()
 {
 	ssize_t bytes = 0;
 
@@ -340,7 +243,7 @@ bool ClientHandler::generateResponse()
 	return (true);
 }
 
-bool ClientHandler::sendResponse()
+bool WriteHandler::sendResponse()
 {
 	ssize_t bytes = 0;
 
@@ -366,38 +269,38 @@ bool ClientHandler::sendResponse()
 		return (true);
 	if (mResponseObj.mStatus >= 400)
 	{
-		LOG_ERROR("sendResponse: client " + mClientIp + ", status " +
+		LOG_ERROR("sendResponse: client " + mAcceptor->getIp() + ", status " +
 				  numToString(mResponseObj.mStatus) + " total size " + numToString(mBytesSent));
 	}
 	else
 	{
-		LOG_NOTICE("sendResponse: client " + mClientIp + ", status " +
+		LOG_NOTICE("sendResponse: client " + mAcceptor->getIp() + ", status " +
 				   numToString(mResponseObj.mStatus) + ", total size " + numToString(mBytesSent));
 	}
 	return mBytesSent == mResponseObj.mResponse.size();
 }
 
-std::string &ClientHandler::getResponse()
+int WriteHandler::getFd() const
 {
-	return (this->mResponseObj.mResponse);
+	return (mSocketFd);
 }
 
-bool ClientHandler::getKeepAlive() const
+bool WriteHandler::getKeepAlive() const
 {
-	return (this->mKeepAlive);
+	return (mKeepAlive);
 }
 
-int ClientHandler::getFd() const
-{
-	return (this->mSocketFd);
-}
-
-void ClientHandler::setCgiReady(bool status)
+void WriteHandler::setCgiReady(bool status)
 {
 	this->mIsCgiDone = status;
 }
 
-void ClientHandler::setCgiFd(int pipeFd)
+void WriteHandler::setCgiFd(int pipeFd)
 {
 	this->mPipeFd = pipeFd;
+}
+
+std::string &WriteHandler::getResponse()
+{
+	return (this->mResponseObj.mResponse);
 }

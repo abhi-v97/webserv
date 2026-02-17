@@ -245,9 +245,9 @@ bool RequestParser::parseBody(std::string &request)
 		bodyToFile = false;
 		bodyFd = -1;
 
-		tempFile = numToString(rand()) + ".tmp";
+		mTempPostFile = numToString(rand()) + ".tmp";
 		int flags = O_WRONLY | O_CREAT | O_TRUNC;
-		bodyFd = open(tempFile.c_str(), flags, 0644);
+		bodyFd = open(mTempPostFile.c_str(), flags, 0644);
 		if (bodyFd < 0)
 			return (handleError(500, "Failed to create the requested resource"), false);
 		setNonBlockingFlag(bodyFd);
@@ -333,9 +333,9 @@ bool RequestParser::getEncoding()
 	return (false);
 }
 
-std::string RequestParser::getPostFile()
+std::string const &RequestParser::getBodyFile() const
 {
-	return (this->tempFile);
+	return (this->mTempPostFile);
 }
 
 size_t RequestParser::getContentLength()

@@ -4,8 +4,9 @@
 #include <unistd.h>
 
 #include "CgiHandler.hpp"
-#include "ClientHandler.hpp"
+#include "ReadHandler.hpp"
 #include "Dispatcher.hpp"
+#include "WriteHandler.hpp"
 
 #define BUFFER_SIZE 4096
 
@@ -13,7 +14,7 @@
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-CgiHandler::CgiHandler(ClientHandler *client)
+CgiHandler::CgiHandler(WriteHandler *client)
 	: m_PID(0), m_fd(), mClient(client), mCgiBody(), mBodySize(0)
 {
 }

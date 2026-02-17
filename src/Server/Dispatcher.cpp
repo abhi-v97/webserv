@@ -2,11 +2,12 @@
 #include <sys/socket.h>
 
 #include "CgiHandler.hpp"
-#include "ClientHandler.hpp"
+#include "WriteHandler.hpp"
 #include "Dispatcher.hpp"
 #include "IHandler.hpp"
-#include "Listener.hpp"
+#include "Acceptor.hpp"
 #include "Logger.hpp"
+#include "configParser.hpp"
 
 #define MAX_LISTEN_REQUESTS 8
 
@@ -93,39 +94,47 @@ void Dispatcher::loop()
 }
 
 /**
-	\brief factory method to create a listener handler for each port
+	\brief factory method to create a acceptor handler for each port
 
 	If the bind was successful (might fail if port is already in use), adds the created object to
 	map mHandler
 */
-void Dispatcher::createListener(int port, ServerConfig srv)
+void Dispatcher::createAcceptor(int port, ServerConfig srv)
 {
-	IHandler *listener = new Listener(port, srv, this);
+	IHandler *acceptor = new Acceptor(port, srv, this);
 
-	if (static_cast<Listener *>(listener)->bindPort() == true)
-		mHandler[listener->getFd()] = listener;
+	if (static_cast<Acceptor *>(acceptor)->bindPort() == true)
+		mHandler[acceptor->getFd()] = acceptor;
 	else
-		delete listener;
+		delete acceptor;
 }
 
 /**
 	\brief factory method to add a new client to poll loop
 */
-void Dispatcher::createClient(int listenFd, ServerConfig *srv)
+void Dispatcher::createReadHandler(int socketFd, ServerConfig *srv, Acceptor *acceptor)
 {
-	IHandler *client = new ClientHandler();
+	IHandler *client = new ReadHandler(socketFd, srv, acceptor, this);
 
-	if (static_cast<ClientHandler *>(client)->acceptSocket(listenFd, srv, this) == false)
-	{
-		delete client;
+	if (!client)
 		return;
-	}
-	mHandler[client->getFd()] = client;
-	struct pollfd pollFdStruct = {client->getFd(), POLLIN, 0};
+	mHandler[socketFd] = client;
+	struct pollfd pollFdStruct = {socketFd, POLLIN, 0};
 	mPollFds.push_back(pollFdStruct);
 }
 
-void Dispatcher::createCgiHandler(ClientHandler *client)
+void Dispatcher::createWriteHandler(int socketFd, RequestParser &requestObj, ServerConfig *srv)
+{
+	IHandler *client = new WriteHandler(socketFd, requestObj, srv);
+
+	if (!client)
+		return;
+	mHandler[socketFd] = client;
+	struct pollfd pollFdStruct = {socketFd, POLLIN, 0};
+	mPollFds.push_back(pollFdStruct);
+}
+
+void Dispatcher::createCgiHandler(WriteHandler *client)
 {
 	IHandler *cgi = new CgiHandler(client);
 
@@ -142,7 +151,7 @@ void Dispatcher::createCgiHandler(ClientHandler *client)
 	mPollFds.push_back(pollFdStruct);
 }
 
-bool Dispatcher::setListeners()
+bool Dispatcher::setAcceptors()
 {
 	mListenCount = mHandler.size();
 	if (mListenCount == 0)
