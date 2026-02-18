@@ -1,3 +1,4 @@
+// ...existing code...
 #include <iostream>
 #include "../configParser.hpp"
 
@@ -12,7 +13,25 @@ static void printLocation(const LocationConfig &loc)
     std::cout << "    methods:";
     for (size_t i = 0; i < loc.methods.size(); ++i) std::cout << " " << loc.methods[i];
     std::cout << "\n";
+
+    // CGI info
+    std::cout << "    cgiEnabled=" << (loc.cgiEnabled ? "on" : "off") << "\n";
+    if (!loc.cgis.empty()) {
+        for (size_t i = 0; i < loc.cgis.size(); ++i) {
+            const CgiConfig &c = loc.cgis[i];
+            std::cout << "      cgi[" << i << "]: extension=" << c.extension
+                      << " pass=" << c.pass << "\n";
+            if (!c.params.empty()) {
+                std::cout << "        params:";
+                for (std::map<std::string,std::string>::const_iterator it = c.params.begin();
+                     it != c.params.end(); ++it)
+                    std::cout << " " << it->first << "=" << it->second;
+                std::cout << "\n";
+            }
+        }
+    }
 }
+// ...existing code...
 
 int main(int argc, char **argv)
 {
@@ -41,3 +60,4 @@ int main(int argc, char **argv)
     }
     return 0;
 }
+// ...existing

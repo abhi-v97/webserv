@@ -9,7 +9,14 @@
 #include <vector>
 #include <map>
 #include <iostream>
+#include <algorithm>
 #include "configLexer.hpp"
+
+struct CgiConfig {
+	std::string					extension;
+	std::string					pass;
+	std::map<std::string,std::string> params;
+};
 
 struct LocationConfig {
 	std::vector<std::string>	methods;
@@ -20,6 +27,8 @@ struct LocationConfig {
 	std::string 				index;
 	std::string 				uploadDir;
 	std::string 				path;
+	std::vector<CgiConfig>		cgis;
+	bool						cgiEnabled;
 };
 
 struct ServerConfig {
@@ -46,6 +55,11 @@ class configParser {
 		void				parseRootDirective(ServerConfig &cfg);
 		void				parseServerName(ServerConfig &cfg);
 		void				parseConfig();
+		void				parseAllowMethods(LocationConfig &loc);
+		void				parseCgiBlock(LocationConfig &loc);
+		void				parseCgiExtension(CgiConfig &cfg);
+		void				parseCgiPass(CgiConfig &cfg);
+		void				parseCgiParam(CgiConfig &cfg);
 		std::string			readFile(const std::string &filename);
 
 	public:

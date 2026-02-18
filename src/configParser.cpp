@@ -44,7 +44,7 @@ void	configParser::advance()
 		current = lexer.getNextToken();
 }
 
-void    configParser::expect(configTokenType type)
+void	configParser::expect(configTokenType type)
 {
 	if (current.type != type)
 		throw std::runtime_error("Unexpected token: " + current.value);
@@ -183,9 +183,9 @@ void	configParser::parseConfig()
 
 LocationConfig	configParser::parseLocationBlock()
 {
-	LocationConfig	loc;
-
+	LocationConfig loc = LocationConfig();
 	loc.redirectErr = 0;
+	loc.cgiEnabled = false;
 	if (current.type != WORD || current.value != "location")
 		throw std::runtime_error("Expected 'location'");
 	advance();
@@ -216,15 +216,7 @@ LocationConfig	configParser::parseLocationBlock()
 			expect(SEMICOLON);
 		}
 		else if (current.value == "allow_methods")
-		{
-			advance();
-			while (current.type == WORD)
-			{
-				loc.methods.push_back(current.value);
-				advance();
-			}
-			expect(SEMICOLON);
-		}
+			parseAllowMethods(loc);
 		else if (current.value == "index")
 		{
 			advance();
@@ -256,9 +248,86 @@ LocationConfig	configParser::parseLocationBlock()
 			loc.redirect = returnPage;
 			loc.redirectErr = code;
 		}
+		else if (current.value == "cgi")
+			parseCgiBlock(loc);
 		else
 			throw std::runtime_error("Unknown directive in location: " + current.value);
 	}
 	expect(RBRACE);
 	return (loc);
+}
+
+void configParser::parseAllowMethods(LocationConfig &loc)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected at least one method after allow_methods");
+
+	while (current.type == WORD)
+	{
+		const std::string &m = current.value;
+		if (m != "GET" && m != "POST" && m != "DELETE")
+			throw std::runtime_error("Invalid method in allow_methods: " + m);
+
+		if (std::find(loc.methods.begin(), loc.methods.end(), m) == loc.methods.end())
+			loc.methods.push_back(m);
+		advance();
+	}
+	expect(SEMICOLON);
+}
+
+void configParser::parseCgiBlock(LocationConfig &loc)
+{
+	advance();
+	expect(LBRACE);
+	CgiConfig cfg;
+	while (current.type != RBRACE && current.type != END)
+	{
+		if (current.value == "cgi_extension")
+			parseCgiExtension(cfg);
+		else if (current.value == "cgi_pass")
+			parseCgiPass(cfg);
+		else if (current.value == "cgi_param")
+			parseCgiParam(cfg);
+		else
+			throw std::runtime_error("Unknown directive in cgi block: " + current.value);
+	}
+	expect(RBRACE);
+	loc.cgis.push_back(cfg);
+	loc.cgiEnabled = true;
+}
+
+void configParser::parseCgiExtension(CgiConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected CGI extension after cgi_extension");
+	cfg.extension = current.value;
+	advance();
+	expect(SEMICOLON);
+}
+
+void configParser::parseCgiPass(CgiConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected program/path after cgi_pass");
+	cfg.pass = current.value;
+	advance();
+	expect(SEMICOLON);
+}
+
+void configParser::parseCgiParam(CgiConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected name after cgi_param");
+	std::string key = current.value;
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected value after cgi_param " + key);
+	std::string value = current.value;
+	cfg.params[key] = value;
+	advance();
+	expect(SEMICOLON);
 }
