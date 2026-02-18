@@ -64,10 +64,10 @@ configToken	configLexer::getNextToken()
 		Tok.type = SEMICOLON;
 		Tok.value = ";"; 
 	}
-	else if (ft_isalnum(c) || c == '/' || c == '.' || c == '_' || c == '-')
+	else if (ft_isalnum(c) || c == '/' || c == '.' || c == '_' || c == '-' || c == '$')
 	{
 		size_t start = pos;
-		while (pos < text.size() && (ft_isalnum(text[pos]) || text[pos] == '/' || text[pos] == '.' || text[pos] == '_' || text[pos] == '-'))
+		while (pos < text.size() && (ft_isalnum(text[pos]) || text[pos] == '/' || text[pos] == '.' || text[pos] == '_' || text[pos] == '-' || text[pos] == '$'))
 			pos++;
 		Tok.type = WORD;
 		Tok.value = text.substr(start, pos - start); 

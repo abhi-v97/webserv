@@ -55,6 +55,8 @@ class configParser {
 		void				parseRootDirective(ServerConfig &cfg);
 		void				parseServerName(ServerConfig &cfg);
 		void				parseConfig();
+		void				parseAutoindex(LocationConfig &loc);
+		void				parseReturn(LocationConfig &loc);
 		void				parseAllowMethods(LocationConfig &loc);
 		void				parseCgiBlock(LocationConfig &loc);
 		void				parseCgiExtension(CgiConfig &cfg);

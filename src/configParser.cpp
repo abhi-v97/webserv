@@ -204,17 +204,7 @@ LocationConfig	configParser::parseLocationBlock()
 			expect(SEMICOLON);
 		}
 		else if (current.value == "autoindex")
-		{
-			advance();
-			if (current.value == "on")
-				loc.autoindex = true;
-			else if (current.value == "off")
-				loc.autoindex = false;
-			else
-				throw std::runtime_error("Expected 'on' or 'off' after autoindex");
-			advance();
-			expect(SEMICOLON);
-		}
+			parseAutoindex(loc);
 		else if (current.value == "allow_methods")
 			parseAllowMethods(loc);
 		else if (current.value == "index")
@@ -232,7 +222,18 @@ LocationConfig	configParser::parseLocationBlock()
 			expect(SEMICOLON);
 		}
 		else if (current.value == "return")
-		{
+			configParser::parseReturn(loc);
+		else if (current.value == "cgi")
+			parseCgiBlock(loc);
+		else
+			throw std::runtime_error("Unknown directive in location: " + current.value);
+	}
+	expect(RBRACE);
+	return (loc);
+}
+
+void configParser::parseReturn(LocationConfig &loc)
+{
 			advance();
 			if (current.type != WORD)
 				throw std::runtime_error("Expected error code");
@@ -247,14 +248,21 @@ LocationConfig	configParser::parseLocationBlock()
 			expect(SEMICOLON);
 			loc.redirect = returnPage;
 			loc.redirectErr = code;
-		}
-		else if (current.value == "cgi")
-			parseCgiBlock(loc);
-		else
-			throw std::runtime_error("Unknown directive in location: " + current.value);
-	}
-	expect(RBRACE);
-	return (loc);
+}
+
+void	configParser::parseAutoindex(LocationConfig &loc)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected 'on' or 'off' after autoindex");
+	if (current.value == "on")
+		loc.autoindex = true;
+	else if (current.value == "off")
+		loc.autoindex = false;
+	else
+		throw std::runtime_error("Invalid value for autoindex: " + current.value);
+	advance();
+	expect(SEMICOLON);
 }
 
 void configParser::parseAllowMethods(LocationConfig &loc)
