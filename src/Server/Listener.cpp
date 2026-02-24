@@ -6,29 +6,27 @@
 #include "Listener.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
+#include "configParser.hpp"
 
-Listener::Listener()
-{
-}
-
-Listener::~Listener()
-{
-}
-
-Listener::Listener(int port, Dispatcher *dispatch)
+Listener::Listener(int port, ServerConfig srv, Dispatcher *dispatch)
 {
 	mDispatch = dispatch;
 	mSocketAddress = sockaddr_in();
 	mSocketAddress.sin_family = AF_INET;
 	mSocketAddress.sin_port = htons(port);
 	mSocketAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
+	mConfig = srv;
 }
 
-// TODO: handle requestClose for listener events
+Listener::~Listener()
+{
+}
+
+// TODO: handle requestClose for Listener events
 void Listener::handleEvents(pollfd &pollStruct)
 {
 	if (pollStruct.revents & POLLIN)
-		mDispatch->createClient(mSocket);
+		newConnection();
 }
 
 /**
@@ -42,8 +40,8 @@ void Listener::handleEvents(pollfd &pollStruct)
 bool Listener::bindPort()
 {
 	// create a new socket
-	mSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (mSocket < 0)
+	mSocketFd = socket(AF_INET, SOCK_STREAM, 0);
+	if (mSocketFd < 0)
 	{
 		LOG_ERROR(std::string("socket() failed: ") + std::strerror(errno));
 		return (false);
@@ -53,17 +51,17 @@ bool Listener::bindPort()
 	// if you close and reopen it quickly. This tells our server that we can
 	// reuse the port.
 	int enable = 1;
-	if (setsockopt(mSocket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+	if (setsockopt(mSocketFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
 	{
 		LOG_ERROR(std::string("setsockopt failed: ") + std::strerror(errno));
 		return (false);
 	}
 
 	// set the socket to be non-blocking
-	setNonBlockingFlag(mSocket);
+	setNonBlockingFlag(mSocketFd);
 
 	// bind socket and server port
-	if (bind(mSocket, (sockaddr *) &mSocketAddress, sizeof(mSocketAddress)) < 0)
+	if (bind(mSocketFd, (sockaddr *) &mSocketAddress, sizeof(mSocketAddress)) < 0)
 	{
 		LOG_ERROR(std::string("bind() failed: ") + std::strerror(errno));
 		return (false);
@@ -73,9 +71,33 @@ bool Listener::bindPort()
 	return (true);
 }
 
+bool Listener::newConnection()
+{
+	struct sockaddr_in clientAddr = {};
+	socklen_t		   clientLen = sizeof(clientAddr);
+	std::ostringstream ipStream;
+	int				   newFd;
+
+	newFd = accept(mSocketFd, (sockaddr *) &clientAddr, &clientLen);
+	if (newFd < 0)
+		return (LOG_ERROR(std::string("newConnection(): ") + std::strerror(errno)), false);
+
+	// get client IP from sockaddr struct, store it as std::string
+	ipStream << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
+			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24);
+
+	mClientIp = ipStream.str();
+	LOG_INFO(std::string("newConnection(): new client fd: ") + numToString(mSocketFd) +
+			 "; ip: " + mClientIp);
+	mDispatch->createClientHandler(newFd, &mConfig, this);
+	return (setNonBlockingFlag(newFd));
+}
+
 int Listener::getFd() const
 {
-	return (this->mSocket);
+	return (this->mSocketFd);
 }
 
 bool Listener::getKeepAlive() const
@@ -83,3 +105,7 @@ bool Listener::getKeepAlive() const
 	return (this->mKeepAlive);
 }
 
+const std::string &Listener::getIp() const
+{
+	return (this->mClientIp);
+}

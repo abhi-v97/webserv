@@ -61,9 +61,9 @@ void Dispatcher::loop()
 	If the bind was successful (might fail if port is already in use), adds the created object to
 	map mHandler
 */
-void Dispatcher::createListener(int port)
+void Dispatcher::createListener(int port, ServerConfig srv)
 {
-	IHandler *listener = new Listener(port, this);
+	IHandler *listener = new Listener(port, srv, this);
 
 	if (static_cast<Listener *>(listener)->bindPort() == true)
 		mHandler[listener->getFd()] = listener;
@@ -74,17 +74,14 @@ void Dispatcher::createListener(int port)
 /**
 	\brief factory method to add a new client to poll loop
 */
-void Dispatcher::createClient(int listenFd)
+void Dispatcher::createClientHandler(int socketFd, ServerConfig *srv, Listener *listener)
 {
-	IHandler *client = new ClientHandler();
+	IHandler *client = new ClientHandler(socketFd, srv, listener, this);
 
-	if (static_cast<ClientHandler *>(client)->acceptSocket(listenFd, this) == false)
-	{
-		delete client;
+	if (!client)
 		return;
-	}
-	mHandler[client->getFd()] = client;
-	struct pollfd pollFdStruct = {client->getFd(), POLLIN, 0};
+	mHandler[socketFd] = client;
+	struct pollfd pollFdStruct = {socketFd, POLLIN, 0};
 	mPollFds.push_back(pollFdStruct);
 }
 
