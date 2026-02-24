@@ -6,39 +6,23 @@
 #include "ClientHandler.hpp"
 #include "Dispatcher.hpp"
 #include "Logger.hpp"
+#include "RequestManager.hpp"
+#include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
 #include "Utils.hpp"
+#include "configParser.hpp"
 
-ClientHandler::ClientHandler()
-	: mSocketFd(-1), mRequest(), mResponse(), mClientIp(), mBytesSent(0), mBytesRead(0),
-	  mParser(RequestParser()), mResponseObj(), mCgiObj(), mResponseReady(false), mIsCgi(false),
-	  mIsCgiDone(false)
+ClientHandler::ClientHandler(int		   socketFd,
+							 ServerConfig *srv,
+							 Listener	  *listener,
+							 Dispatcher	  *dispatch)
+	: mSocketFd(socketFd), mRequest(), mClientIp(), mBytesSent(0), mParser(), mResponseObj(),
+	  mCgiObj(), mIsCgi(false), mIsCgiDone(false), mPipeFd(0), mRequestNum(0), mConfig(srv),
+	  mDispatch(dispatch), mListener(listener)
 {
-}
-
-bool ClientHandler::acceptSocket(int listenFd, Dispatcher *dispatch)
-{
-	struct sockaddr_in clientAddr = {};
-	socklen_t		   clientLen = sizeof(clientAddr);
-	std::ostringstream ipStream;
-
-	mSocketFd = accept(listenFd, (sockaddr *) &clientAddr, &clientLen);
-	if (mSocketFd < 0)
-	{
-		LOG_ERROR(std::string("accept() failed: ") + std::strerror(errno));
-		return (false);
-	}
-	LOG_INFO(std::string("accept(): new client fd: ") + numToString(mSocketFd));
-
-	// get client IP from sockaddr struct, store it as std::string
-	ipStream << int(clientAddr.sin_addr.s_addr & 0xFF) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF00) >> 8) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF0000) >> 16) << "."
-			 << int((clientAddr.sin_addr.s_addr & 0xFF000000) >> 24) << std::endl;
-
-	mClientIp = ipStream.str();
-	mDispatch = dispatch;
-	return (setNonBlockingFlag(mSocketFd));
+	mParser.mResponse = &mResponseObj;
+	mResponseObj.mParser = &mParser;
+	mParser.mClient = this;
 }
 
 ClientHandler::~ClientHandler()
@@ -47,11 +31,13 @@ ClientHandler::~ClientHandler()
 
 void ClientHandler::handleEvents(pollfd &pollStruct)
 {
-	if (pollStruct.revents & POLLIN)
+	if (pollStruct.revents & POLLIN && mParser.getParsingFinished() == false)
 	{
 		this->readSocket();
 		if (this->parseRequest() == true)
 		{
+			LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig->serverName +
+								   ", request: \"" + mParser.getRequestHeader() + "\""));
 			pollStruct.events |= POLLOUT;
 			generateResponse();
 		}
