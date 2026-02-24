@@ -141,9 +141,55 @@ bool ClientHandler::generateResponse()
 	return (true);
 }
 
-std::string &ClientHandler::getResponse()
+void ClientHandler::setSession(RouteResult &out)
 {
-	return (this->mResponse);
+	bool		 sessionFound = false;
+	std::string &cookies = mParser.getCookies();
+	Session		*session = NULL;
+	std::string	 id;
+	time_t		 now = time(NULL);
+
+	size_t sessIdStart = cookies.find("session");
+	if (sessIdStart != std::string::npos)
+	{
+		id = cookies.substr(sessIdStart + 8, 12);
+		session = mDispatch->getSession(id);
+		if (!session)
+		{
+			// TODO: check for invalid session ID
+		}
+		else if (mSession != session)
+		{
+			// TODO: wrong session ID provided, send an error and close connection
+			LOG_ERROR("Session id mismatch");
+			return;
+		}
+		else if (now - session->lastAccessed > 1800)
+		{
+			// TODO: maybe respond with a session timed out message?
+			mDispatch->deleteSession(id);
+		}
+		else
+		{
+			session->lastAccessed = now;
+			sessionFound = true;
+		}
+	}
+	sessIdStart = cookies.find("session", sessIdStart + 8);
+	if (sessIdStart != std::string::npos)
+	{
+		// TODO:: two sessions found...
+		return;
+	}
+	if (!sessionFound)
+	{
+		// create new sesh ID
+		id = generateId();
+		mSession = mDispatch->addSession(id);
+		out.sessionId = id;
+		mResponseObj.setSessionId(id);
+		cookies.append("session=" + id);
+	}
 }
 
 bool ClientHandler::getKeepAlive() const
@@ -164,4 +210,9 @@ void ClientHandler::setCgiReady(bool status)
 void ClientHandler::setCgiFd(int pipeFd)
 {
 	this->mPipeFd = pipeFd;
+}
+
+std::string &ClientHandler::getResponse()
+{
+	return (this->mResponseObj.mResponse);
 }

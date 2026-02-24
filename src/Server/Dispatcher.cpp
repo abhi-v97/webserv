@@ -1,12 +1,13 @@
 #include <csignal>
+#include <cstring>
 #include <sys/socket.h>
 
 #include "CgiHandler.hpp"
 #include "ClientHandler.hpp"
 #include "Dispatcher.hpp"
 #include "IHandler.hpp"
-#include "Listener.hpp"
 #include "Logger.hpp"
+#include "configParser.hpp"
 
 #define MAX_LISTEN_REQUESTS 8
 
@@ -28,35 +29,72 @@ Dispatcher::~Dispatcher()
 		delete mHandler[mPollFds[i].fd];
 		close(mPollFds[i].fd);
 	}
+	for (std::map<std::string, Session *>::iterator it = mSessions.begin(); it != mSessions.end();
+		 it++)
+	{
+		if (it->second)
+			delete it->second;
+	}
+	mSessions.clear();
 }
 
 void Dispatcher::loop()
 {
 	std::signal(SIGINT, SIG_IGN);
 	std::signal(SIGINT, signalHandler);
+	time_t nextReap = time(NULL) + 900;
+
 	while (gSignal == 0)
 	{
-		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), 1);
+		time_t timeNow = time(NULL);
+		int	   timeout = 60; // 60s timeout cap
+		long   remaining = static_cast<long>(nextReap - timeNow);
+
+		if (remaining < 1)
+			timeout = 1;
+		else if (remaining < timeout)
+			timeout = static_cast<int>(remaining);
+
+		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), timeout * 1000);
 		if (pollNum < 0)
 		{
-			if (gSignal == SIGINT)
-				return;
-			LOG_FATAL(std::string("poll() failed: ") + std::strerror(errno));
+			if (gSignal != SIGINT)
+				LOG_FATAL(std::string("loop(): poll() failed: ") + std::strerror(errno));
+			return;
 		}
+		// reaper, delete inactive sessions every 15 minutes (900 secs)
+		timeNow += timeout;
+		if (timeNow >= nextReap)
+		{
+			for (std::map<std::string, Session *>::iterator it = mSessions.begin();
+				 it != mSessions.end();
+				 it++)
+			{
+				// inactive for 30 minutes or more
+				if (timeNow - it->second->lastAccessed > 1)
+				{
+					delete it->second;
+					mSessions.erase(it);
+				}
+			}
+			nextReap = timeNow + 900;
+		}
+		// poll timed out, if no fds were ready, continue to next poll
+		if (pollNum == 0)
+			continue;
+		// web server main event loop
 		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
 		{
 			if (mPollFds[i].revents != 0)
 				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i]);
 			if (mHandler[mPollFds[i].fd]->getKeepAlive() == false)
-			{
 				removeClient(i);
-			}
 		}
 	}
 }
 
 /**
-	\brief factory method to create a listener handler for each port
+	\brief factory method to create a Listener handler for each port
 
 	If the bind was successful (might fail if port is already in use), adds the created object to
 	map mHandler
@@ -134,6 +172,30 @@ void Dispatcher::removeClient(int pollNum)
 	delete mHandler[clientFd];
 	mHandler.erase(clientFd);
 	mPollFds.erase(mPollFds.begin() + pollNum);
+	close(clientFd);
+}
+
+Session *Dispatcher::addSession(std::string sessionId)
+{
+	Session *newSession = new Session();
+	time_t	 now = time(NULL);
+
+	newSession->lastAccessed = now;
+	newSession->timeCreated = now;
+	newSession->user = "";
+	mSessions[sessionId] = newSession;
+	return (newSession);
+}
+
+Session *Dispatcher::getSession(const std::string &sessionId)
+{
+	return (this->mSessions[sessionId]);
+}
+
+void Dispatcher::deleteSession(const std::string &sessionId)
+{
+	delete mSessions[sessionId];
+	mSessions.erase(sessionId);
 }
 
 /**
