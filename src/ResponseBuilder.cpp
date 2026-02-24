@@ -37,7 +37,24 @@ std::string ResponseBuilder::getResponse()
 
 void ResponseBuilder::reset()
 {
+	mStatus = 200;
+	mMin = 0;
+	mMax = 0;
+	mResponseReady = false;
+	mNewSession = false;
 	mResponse.clear();
+	mResponseStream.clear();
+	mResponseStream.str("");
+	mSessionId.clear();
+}
+
+void ResponseBuilder::addCookies()
+{
+	mResponseStream << "Set-Cookie: last-accessed=" << getTimestamp() << "; Path=/;\r\n";
+	mResponseStream << "Set-Cookie: total-requests=" << mParser->getRequestCount()
+					<< "; Path=/;\r\n";
+	if (mNewSession == true)
+		mResponseStream << "Set-Cookie: session=" << mSessionId << "; Path=/;\r\n";
 }
 
 // simple response to a GET request
@@ -48,7 +65,7 @@ void ResponseBuilder::reset()
 // Accept-ranges: bytes tells browser etc that our web server supports range
 // requests, i.e browser can pause and resume downloads, or jump around in a
 // video player
-std::string ResponseBuilder::buildResponse(const std::string &uri)
+void ResponseBuilder::buildResponse(const std::string &uri)
 {
 	std::string file = "www";
 
@@ -59,9 +76,10 @@ std::string ResponseBuilder::buildResponse(const std::string &uri)
 	std::ostringstream body;
 
 	body << requestFile.rdbuf();
-	response << "HTTP/1.1 " << mStatus
-			 << " 0K\r\nContent-Type: " << MimeTypes::getInstance()->getType(uri)
-			 << "\r\nAccept-Ranges: bytes\r\n";
+	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
+	addCookies();
+	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(uri)
+					<< "\r\nAccept-Ranges: bytes\r\n";
 
 	if (mMax == 0)
 		mMax = body.str().size() - 1;
@@ -69,9 +87,15 @@ std::string ResponseBuilder::buildResponse(const std::string &uri)
 	if (mStatus == 206)
 	{
 		std::string newbody = body.str().substr(mMin, mMax - mMin + 1);
-		response << "Content-Range: bytes " << mMin << "-" << mMax << "/" << body.str().size();
-		response << "\r\nContent-Length: " << mMax - mMin + 1;
-		response << "\r\n\r\n" << newbody;
+		mResponseStream << "Content-Range: bytes " << mMin << "-" << mMax << "/"
+						<< body.str().size();
+		mResponseStream << "\r\nContent-Length: " << mMax - mMin + 1;
+		mResponseStream << "\r\n\r\n" << newbody;
+	}
+	else if (mParser->getMethod() == GET)
+	{
+		mResponseStream << "Content-Length: " << body.str().size();
+		mResponseStream << "\r\n\r\n" << body.str();
 	}
 	else
 	{
@@ -119,8 +143,8 @@ void ResponseBuilder::parseRangeHeader(RequestParser &parser)
 		size_t equal = rangeStr.find_first_of('=');
 		size_t dash = rangeStr.find_first_of('-');
 
-		mMin = std::atoi(rangeStr.c_str() + equal + 1);
-		mMax = std::atoi(rangeStr.c_str() + dash + 1);
-		std::cout << "minStr: " << mMin << ", maxStr: " << mMax << std::endl;
-	}
+void ResponseBuilder::setSessionId(const std::string &id)
+{
+	mSessionId = id;
+	mNewSession = true;
 }
