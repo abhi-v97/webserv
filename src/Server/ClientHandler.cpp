@@ -143,6 +143,10 @@ bool ClientHandler::generateResponse()
 		mResponseObj.mResponseReady = true;
 		mDispatch->createCgiHandler(this);
 	}
+	else
+	{
+		LOG_ERROR("RequestManager failed to find a valid route for this request");
+	}
 	return (true);
 }
 
