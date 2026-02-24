@@ -4,7 +4,9 @@
 #include <iostream>
 #include <unistd.h>
 
+#include "Logger.hpp"
 #include "MimeTypes.hpp"
+#include "RequestManager.hpp"
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
 
@@ -14,7 +16,8 @@
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-ResponseBuilder::ResponseBuilder(): mResponse(), mMin(0), mMax(0), mStatus(200)
+ResponseBuilder::ResponseBuilder()
+	: mResponseReady(false), mNewSession(false), mResponseStream(), mMin(0), mMax(0), mStatus(200)
 {
 }
 
@@ -32,7 +35,7 @@ ResponseBuilder::~ResponseBuilder()
 
 std::string ResponseBuilder::getResponse()
 {
-	return mResponse.str();
+	return mResponseStream.str();
 }
 
 void ResponseBuilder::reset()
@@ -67,14 +70,15 @@ void ResponseBuilder::addCookies()
 // video player
 void ResponseBuilder::buildResponse(const std::string &uri)
 {
-	std::string file = "www";
-
-	file.append(uri);
-
-	std::ifstream	   requestFile(file.c_str());
-	std::ostringstream response;
 	std::ostringstream body;
+	std::ifstream	   requestFile(uri.c_str());
 
+	// if the requested file could not be opened
+	if (requestFile.good() == false)
+	{
+		buildSimpleResponse(500, "The requested file could not be accessed");
+		return;
+	}
 	body << requestFile.rdbuf();
 	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
 	addCookies();
@@ -97,12 +101,43 @@ void ResponseBuilder::buildResponse(const std::string &uri)
 		mResponseStream << "Content-Length: " << body.str().size();
 		mResponseStream << "\r\n\r\n" << body.str();
 	}
-	else
+	mResponse = mResponseStream.str();
+	mResponseReady = true;
+}
+
+// TODO: optimise this, use something like the stat() function instead of
+// loading the entire file into memory
+void ResponseBuilder::buildPartialResponse(RouteResult &out)
+{
+	std::ostringstream body;
+	std::ifstream	   requestFile(out.filePath.c_str());
+
+	// if the requested file could not be opened
+	if (requestFile.good() == false)
 	{
-		response << "Content-Length: " << body.str().size();
-		response << "\r\n\r\n" << body.str();
+		buildSimpleResponse(500, "The requested file could not be accessed");
+		return;
 	}
-	return response.str();
+	body << requestFile.rdbuf();
+	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
+	addCookies();
+	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(out.filePath)
+					<< "\r\nAccept-Ranges: bytes\r\n";
+
+	// if request doesn't give a max number, set it to end of the file
+	if (out.partialLength == 0)
+		out.partialLength = body.str().size() - 1;
+
+	std::string partialBody = body.str().substr(out.partialOffset, out.partialLength + 1);
+
+	LOG_DEBUG("response body size: " + numToString(newbody.size()));
+	mResponseStream << "Content-Range: bytes " << out.partialOffset << "-" << out.partialLength + out.partialOffset << "/"
+					<< body.str().size();
+	mResponseStream << "\r\nContent-Length: " << out.partialLength + 1;
+	mResponseStream << "\r\n\r\n" << partialBody;
+
+	mResponse = mResponseStream.str();
+	mResponseReady = true;
 }
 
 bool ResponseBuilder::readCgiResponse(int pipeOutFd)
@@ -118,30 +153,41 @@ bool ResponseBuilder::readCgiResponse(int pipeOutFd)
 		body << buffer;
 		len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	}
-	mResponse << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " << body.str().size()
-			  << body.str();
-	std::cout << mResponse.str() << std::endl;
-
+	mResponseStream << "HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: "
+					<< body.str().size() << "\r\n\r\n"
+					<< body.str();
 	// returns true if len isn't positive, meaning read is finished
-	return len <= 0;
+	return (len <= 0);
 }
 
-void ResponseBuilder::parseRangeHeader(RequestParser &parser)
+// TODO: add connection: close in response header when applicable
+// TODO: add a function that writes the name of the error code based on what error occurred next to
+// the Error code, so for 404 it returns "Not Found", for 500 its "Internal Server Error"
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
+void ResponseBuilder::buildErrorResponse(RouteResult &route)
 {
-	std::string rangeStr;
+	mStatus = route.status;
+	mResponseStream << "HTTP/1.1 " << numToString(mStatus)
+					<< "\r\nContent-Type: text/html\r\nContent-Length: "
+					<< numToString(80 + route.bodyMsg.size())
+					<< "\r\n\r\n<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
+					<< numToString(mStatus) << "</h2><p> " << route.bodyMsg << "</p></html>";
+	mResponse = mResponseStream.str();
+	LOG_ERROR("ResponseBuilder: Error status: " + numToString(mStatus) + ": " + route.bodyMsg);
+	LOG_DEBUG(mResponse);
+	mResponseReady = true;
+}
 
-	rangeStr = parser.getHeaders()["range"];
-
-	if (rangeStr.empty())
-	{
-		mStatus = 200;
-		return;
-	}
-	else
-	{
-		mStatus = 206;
-		size_t equal = rangeStr.find_first_of('=');
-		size_t dash = rangeStr.find_first_of('-');
+void ResponseBuilder::buildSimpleResponse(int status, const std::string &msg)
+{
+	mResponseStream << "HTTP/1.1 " << numToString(status)
+					<< "\r\nContent-Type: text/plain\r\nContent-Length: " << numToString(msg.size())
+					<< "\r\n\r\n"
+					<< msg;
+	mResponse = mResponseStream.str();
+	LOG_DEBUG(mResponse);
+	mResponseReady = true;
+}
 
 void ResponseBuilder::setSessionId(const std::string &id)
 {

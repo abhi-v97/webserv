@@ -6,6 +6,7 @@
 #include "CgiHandler.hpp"
 #include "ClientHandler.hpp"
 #include "Dispatcher.hpp"
+#include "Logger.hpp"
 
 #define BUFFER_SIZE 4096
 
@@ -51,7 +52,7 @@ std::ostream &operator<<(std::ostream &outf, const CgiHandler &obj)
 // duping, this will not work for multiple clients
 bool CgiHandler::execute(std::string cgiName)
 {
-	std::string cgiFile = ("cgi-bin/" + cgiName);
+	std::string cgiFile = ("www/cgi-bin/" + cgiName);
 	// char *cwd = getcwd(NULL, 0);
 
 	if (pipe(this->m_fd) < 0)
@@ -124,6 +125,7 @@ void CgiHandler::setCgiResponse()
 				  << "\r\n\r\n"
 				  << mCgiBody;
 	clientResponse = finalResponse.str();
+	LOG_DEBUG(clientResponse);
 	close(m_fd[0]);
 	m_fd[0] = -1;
 	mKeepAlive = false;
@@ -136,11 +138,6 @@ void CgiHandler::setCgiResponse()
 int CgiHandler::getFd() const
 {
 	return this->m_fd[0];
-}
-
-void CgiHandler::setCgiType(CgiType type)
-{
-	this->mType = type;
 }
 
 bool CgiHandler::getKeepAlive() const
