@@ -1,8 +1,8 @@
 #include <netinet/in.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
-#include "CgiHandler.hpp"
 #include "ClientHandler.hpp"
 #include "Dispatcher.hpp"
 #include "Logger.hpp"
@@ -39,24 +39,31 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 			LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig->serverName +
 								   ", request: \"" + mParser.getRequestHeader() + "\""));
 			pollStruct.events |= POLLOUT;
-			generateResponse();
 		}
 	}
 	else if (pollStruct.revents & POLLOUT)
 	{
-		if (this->generateResponse() == true)
+		if (generateResponse() == true)
 		{
-			if (this->sendResponse() == true)
+			if (sendResponse() == true)
 			{
-				mResponseReady = false;
+				mKeepAlive = mParser.getKeepAliveRequest();
+				mRequestNum++;
+				mBytesSent = 0;
+				mIsCgi = false;
+				mIsCgiDone = false;
+				mParser.reset();
+				mResponseObj.reset();
 				parseRequest();
 			}
 			return;
 		}
+		// remove POLLOUT if you failed to generate a valid response
 		pollStruct.events &= ~POLLOUT;
 	}
 }
 
+// TODO: add logic for string.reserve to prevent repeat allocs
 void ClientHandler::readSocket()
 {
 	char	buffer[4096];
@@ -69,14 +76,14 @@ void ClientHandler::readSocket()
 	bytesRead = recv(mSocketFd, buffer, 4096, 0);
 	if (bytesRead < 0)
 	{
-		LOG_WARNING(std::string("recv(): client " + numToString(mSocketFd)) +
+		LOG_WARNING(std::string("readSocket(): client " + numToString(mSocketFd)) +
 					": failed to read from socket");
 		return;
 	}
 	else if (bytesRead == 0)
 	{
-		LOG_NOTICE(std::string("recv(): client " + numToString(mSocketFd)) +
-				   ": zero bytes received, closing connection ");
+		LOG_NOTICE(std::string("readSocket(): client " + numToString(mSocketFd)) +
+				   ": zero bytes received, closing connection");
 		mKeepAlive = false;
 		return;
 	}
@@ -90,12 +97,53 @@ bool ClientHandler::parseRequest()
 
 	if (mParser.parse(mRequest) == false)
 	{
-		LOG_ERROR(std::string("parser(): client " + numToString(mSocketFd) +
-							  ": invalid request, closing connection "));
-		mKeepAlive = false;
-		return (false);
+		// TODO: close the connection only for terrible requests
+		// if the request error was 400 (bad format) or 404 (file not found), there's no need to
+		// close the connection straight away
+		// close it for errors where we do not know where the next request may start on the socket
+		// stream, eg payload too large, 414 uri too long, or 408 request timeout (if implemented)
+
+		// LOG_ERROR(std::string("parseRequest(): client " + numToString(mSocketFd) +
+		// 					  ": invalid HTTP request, closing connection"));
+		// mKeepAlive = false;
+		// return (false);
+		mRequest.clear();
 	}
 	return (mParser.getParsingFinished());
+}
+
+bool ClientHandler::generateResponse()
+{
+	if (mIsCgi == true && mIsCgiDone == false)
+		return (true);
+	if (mResponseObj.mResponseReady == true)
+		return (true);
+	if (mParser.getParsingFinished() == false)
+		return (false);
+
+	RouteResult route = mDispatch->getRouter().route(mParser, mConfig, mSession);
+	setSession(route);
+	if (route.type == RR_ERROR)
+	{
+		mResponseObj.buildErrorResponse(route);
+	}
+	else if (route.type == RR_BASIC)
+	{
+		mResponseObj.buildSimpleResponse(route.status, route.bodyMsg);
+	}
+	else if (route.type == RR_GET)
+	{
+		mResponseObj.buildResponse(route.filePath);
+	}
+	else if (route.type == RR_PARTIAL)
+		mResponseObj.buildPartialResponse(route);
+	else if (route.type == RR_CGI)
+	{
+		mIsCgi = true;
+		mResponseObj.mResponseReady = true;
+		mDispatch->createCgiHandler(this);
+	}
+	return (true);
 }
 
 bool ClientHandler::sendResponse()
@@ -104,41 +152,35 @@ bool ClientHandler::sendResponse()
 
 	if (mIsCgi == true && mIsCgiDone == false)
 		return (false);
-	bytes = send(
-		mSocketFd, mResponse.c_str() + mBytesSent, mResponse.size() - mBytesSent, MSG_NOSIGNAL);
+	if (mIsCgi == true)
+	{
+		bytes = send(mSocketFd,
+					 mResponseObj.mResponse.c_str() + mBytesSent,
+					 mResponseObj.mResponse.size() - mBytesSent,
+					 MSG_NOSIGNAL);
+	}
+	else
+	{
+		bytes = send(mSocketFd,
+					 mResponseObj.mResponse.c_str() + mBytesSent,
+					 mResponseObj.mResponse.size() - mBytesSent,
+					 MSG_NOSIGNAL);
+	}
 	if (bytes > 0)
 		mBytesSent += bytes;
 	else
 		return (true);
-	LOG_NOTICE("response(): client: " + numToString(mSocketFd) + ": status " +
-			   numToString(mResponseObj.mStatus) + " total size " + numToString(mBytesSent));
-	return mBytesSent == mResponse.size();
-}
-
-bool ClientHandler::generateResponse()
-{
-	ssize_t bytes = 0;
-
-	mIsCgi = false;
-	if (mResponseReady == true)
-		return (true);
-	if (mParser.getParsingFinished() == false)
-		return (false);
-	mResponseReady = false;
-	if (mIsCgi)
+	if (mResponseObj.mStatus >= 400)
 	{
-		mDispatch->createCgiHandler(this);
+		LOG_ERROR("sendResponse: client " + mListener->getIp() + ", status " +
+				  numToString(mResponseObj.mStatus) + " total size " + numToString(mBytesSent));
 	}
 	else
 	{
-		mResponseObj.parseRangeHeader(mParser);
-		mResponse = mResponseObj.buildResponse(mParser.getUri());
+		LOG_NOTICE("sendResponse: client " + mListener->getIp() + ", status " +
+				   numToString(mResponseObj.mStatus) + ", total size " + numToString(mBytesSent));
 	}
-	mKeepAlive = mParser.getKeepAliveRequest();
-	mParser.reset();
-	mResponseReady = true;
-	mBytesSent = 0;
-	return (true);
+	return mBytesSent == mResponseObj.mResponse.size();
 }
 
 void ClientHandler::setSession(RouteResult &out)
