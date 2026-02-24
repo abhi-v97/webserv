@@ -91,25 +91,28 @@ bool RequestParser::parse(std::string &requestBuffer)
 
 bool RequestParser::parseHeader(const std::string &header)
 {
+	LOG_DEBUG("parsing request-line");
 	// extract method
 	int methodEnd = header.find_first_of(' ', 0);
 	setMethod(header.substr(0, methodEnd));
 	if (mMethod == UNKNOWN)
-		return (false);
+		return (handleError(400, "Unknown/invalid HTTP method provided"), false);
 
 	// extract uri
 	int uriEnd = header.find_first_of(' ', methodEnd + 1);
 	if (uriEnd == std::string::npos)
-		return (false);
+		return (LOG_ERROR("parseHeader(): bad request-line"), false);
 	mRequestUri = header.substr(methodEnd + 1, uriEnd - methodEnd - 1);
 	if (validateUri(mRequestUri) == false)
-		return (false);
+		return (handleError(400, "parseHeader(): invalid URI format, must begin with / or http://"),
+				false); // TODO: read the RFC again, see how URI is formatted, make a note of it
+						// somewhere
 
 	// extract version
 	int versionEnd = header.find_first_of('\r', uriEnd + 1);
 	mHttpVersion = header.substr(uriEnd + 1, 8);
 	if (mHttpVersion != "HTTP/1.1" && mHttpVersion != "HTTP/1.0")
-		return (false);
+		return (handleError(400, "Bad or invalid HTTP version"), false);
 
 	// advance state
 	mState = FIELD;
@@ -126,15 +129,13 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 	size_t		firstChar = rawFieldName.find_first_not_of(" \t");
 	size_t		lastChar = colonPos;
 	if (firstChar == colonPos)
-		return (false);
+		return (handleError(400, "Invalid HTTP header field"), false);
 
 	std::string fieldName = rawFieldName.substr(firstChar, lastChar - firstChar);
 	if (fieldName.find_first_of(" \t") != std::string::npos)
 		return (false);
 	for (std::string::iterator it = fieldName.begin(); it != fieldName.end(); it++)
-	{
 		*it = std::tolower(static_cast<unsigned char>(*it));
-	}
 
 	size_t		fieldValueStart = buffer.find_first_not_of(" \t", colonPos + 1);
 	size_t		fieldValueEnd = buffer.find_last_not_of("\r\n");
