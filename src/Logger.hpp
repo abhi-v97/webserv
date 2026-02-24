@@ -37,7 +37,7 @@
 
 // set default compile level
 #ifndef LOG_LEVEL
-#define LOG_LEVEL LOG_LEVEL_INFO
+#define LOG_LEVEL LOG_LEVEL_NOTICE
 #endif
 
 #if LOG_LEVEL <= LOG_LEVEL_DEBUG
@@ -134,6 +134,8 @@ template<typename T> std::string numToString(T n)
 	buf << n;
 	return buf.str();
 }
+
+std::string getTimestamp(void);
 
 #endif /* ********************************************************** LOGGER_H                      \
 		*/

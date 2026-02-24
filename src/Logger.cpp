@@ -22,7 +22,7 @@ Logger::Logger()
 
 	std::time(&timeNow);
 	timeStruct = std::localtime(&timeNow);
-	std::strftime(buffer, BUF_SIZE, "%Y-%m-%d_%H:%M:%S.log", timeStruct);
+	std::strftime(buffer, BUF_SIZE, "%d/%m/%Y_%H:%M:%S.log", timeStruct);
 	Logger::mFile.open(buffer, std::ios::app);
 }
 
@@ -66,10 +66,10 @@ std::string levelToString(LogLevel level)
 	{
 	case DEBUG:
 		return "debug";
-	case NOTICE:
-		return "notice";
 	case INFO:
 		return "info";
+	case NOTICE:
+		return "notice";
 	case WARNING:
 		return "warning";
 	case ERROR:
@@ -91,7 +91,7 @@ std::string getTimestamp(void)
 
 	std::time(&timeNow);
 	timeStruct = std::localtime(&timeNow);
-	std::strftime(buffer, BUF_SIZE, "%Y-%m-%d %H:%M:%S ", timeStruct);
+	std::strftime(buffer, BUF_SIZE, "%d/%m/%Y %H:%M:%S ", timeStruct);
 	return buffer;
 }
 

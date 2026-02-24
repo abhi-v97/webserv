@@ -16,7 +16,7 @@
 */
 int gSignal = 0;
 
-Dispatcher::Dispatcher()
+Dispatcher::Dispatcher(): mRequestManager(this)
 {
 }
 
@@ -207,4 +207,9 @@ void Dispatcher::deleteSession(const std::string &sessionId)
 void signalHandler(int sig)
 {
 	gSignal = sig;
+}
+
+RequestManager &Dispatcher::getRouter()
+{
+	return (mRequestManager);
 }

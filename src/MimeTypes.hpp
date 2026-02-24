@@ -5,7 +5,7 @@
 
 /** \class MimeTypes
  *
- *	Simple class that stores a list of supported file extensions
+ *	Simple class that stores and returns a list of supported file extensions
  */
 class MimeTypes
 {
