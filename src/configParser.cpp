@@ -6,6 +6,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <set>
 
 configParser::configParser(const std::string &filename) : input(readFile(filename)), lexer(input) {
 	advance();
@@ -251,13 +252,30 @@ void configParser::parseServerName(ServerConfig &cfg)
 
 void	configParser::parseConfig()
 {
+	std::set<int> usedPorts;
 	while (current.type != END)
 	{
 		ServerConfig server = parseServerBlock();
+
+		// check for duplicate ports across previously parsed server blocks
+		for (size_t i = 0; i < server.listenConfigs.size(); ++i)
+		{
+			int p = server.listenConfigs[i].port;
+			if (usedPorts.find(p) != usedPorts.end())
+			{
+				std::stringstream ss;
+				ss << "Duplicate listen port across server blocks: " << p;
+				throw std::runtime_error(ss.str());
+			}
+		}
+
+		// register this server's ports as used
+		for (size_t i = 0; i < server.listenConfigs.size(); ++i)
+			usedPorts.insert(server.listenConfigs[i].port);
+
 		this->servers.push_back(server);
 	}
 }
-
 LocationConfig	configParser::parseLocationBlock()
 {
 	LocationConfig loc = LocationConfig();
