@@ -19,7 +19,7 @@ class Listener: public IHandler
 {
 public:
 	Listener();
-	Listener(int port, Dispatcher *dispatch);
+	Listener(const std::string &ip, int port, Dispatcher *dispatch);
 	~Listener();
 
 	void newConnection();

@@ -15,13 +15,17 @@ Listener::~Listener()
 {
 }
 
-Listener::Listener(int port, Dispatcher *dispatch)
+Listener::Listener(const std::string &ip, int port, Dispatcher *dispatch)
 {
 	mDispatch = dispatch;
 	mSocketAddress = sockaddr_in();
 	mSocketAddress.sin_family = AF_INET;
 	mSocketAddress.sin_port = htons(port);
-	mSocketAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
+	struct in_addr ina;
+	if (!ip.empty() && inet_pton(AF_INET, ip.c_str(), &ina) == 1)
+		mSocketAddress.sin_addr = ina;
+	else
+		mSocketAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
 }
 
 // TODO: handle requestClose for listener events
@@ -82,4 +86,3 @@ bool Listener::getKeepAlive() const
 {
 	return (this->mKeepAlive);
 }
-
