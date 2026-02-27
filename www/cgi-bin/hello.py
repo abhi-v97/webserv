@@ -4,6 +4,8 @@ import cgi
 import os
 import time
 
+print("Content-Type: text/html")
+print()  # Mandatory blank line after headers
 print("<!DOCTYPE html>")
 print("<html lang='en'>")
 print("<head>")
