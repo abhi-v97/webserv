@@ -46,7 +46,8 @@ int main(int argc, char **argv)
             std::cout << " root=" << s.root << "\n";
             std::cout << " clientMaxBodySize=" << s.clientMaxBodySize << "\n";
             std::cout << " listenPorts:";
-            for (size_t j = 0; j < s.listenPorts.size(); ++j) std::cout << " " << s.listenPorts[j];
+            for (size_t j = 0; j < s.listenConfigs.size(); ++j)
+	                std::cout << " " << s.listenConfigs[j].IP << ":" << s.listenConfigs[j].port;
             std::cout << "\n";
             std::cout << " errorPages:\n";
             for (std::map<int,std::string>::const_iterator it = s.errorPages.begin(); it != s.errorPages.end(); ++it)

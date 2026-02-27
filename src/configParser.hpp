@@ -31,10 +31,15 @@ struct LocationConfig {
 	bool						cgiEnabled;
 };
 
+struct ListenConfig {
+	std::string IP;
+	int		port;
+};
+
 struct ServerConfig {
 	std::string					serverName;
 	std::string					root;
-	std::vector<int> 			listenPorts;
+	std::vector<ListenConfig>	listenConfigs;
 	std::map<int, std::string>	errorPages;
 	size_t						clientMaxBodySize;
 	std::vector<LocationConfig>	locations;
@@ -52,6 +57,10 @@ class configParser {
 		void				parseErrorPage(ServerConfig &cfg);
 		void				parseClientMaxBodySize(ServerConfig &cfg);
 		void				parseListen(ServerConfig &cfg, int &port);
+		std::pair<std::string,std::string>	splitAddressPort(const std::string &token);
+		void				validatePortString(const std::string &portStr);
+		void				validateAddress(const std::string &addr);
+		void				addListen(ServerConfig &cfg, const std::string &addr, int port);
 		void				parseRootDirective(ServerConfig &cfg);
 		void				parseServerName(ServerConfig &cfg);
 		void				parseConfig();

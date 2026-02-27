@@ -1,4 +1,11 @@
 #include "configParser.hpp"
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <stdexcept>
+#include <string>
 
 configParser::configParser(const std::string &filename) : input(readFile(filename)), lexer(input) {
 	advance();
@@ -139,16 +146,86 @@ void configParser::parseErrorPage(ServerConfig &cfg)
 	cfg.errorPages[code] = path;
 }
 
-void	configParser::parseListen(ServerConfig &cfg, int &port)
+std::pair<std::string,std::string> configParser::splitAddressPort(const std::string &token)
 {
-	LocationConfig loc;
+	std::size_t colon = token.find(':');
+	if (colon == std::string::npos)
+		return std::make_pair(std::string("127.0.0.1"), token);
+	std::string addr = token.substr(0, colon);
+	std::string portStr = token.substr(colon + 1);
+	return std::make_pair(addr, portStr);
+}
+
+void configParser::validateAddress(const std::string &addr)
+{
+	// only accept valid IPv4 here
+	struct in_addr ina;
+	if (addr.empty())
+		throw std::runtime_error("Empty address in listen directive");
+	if (inet_pton(AF_INET, addr.c_str(), &ina) != 1)
+		throw std::runtime_error("Invalid listen address: " + addr);
+}
+
+static int parsePortFromString(const std::string &portStr)
+{
+	if (portStr.empty())
+		throw std::runtime_error("Empty port in listen directive");
+
+	for (size_t i = 0; i < portStr.size(); ++i)
+	{
+		if (!std::isdigit(static_cast<unsigned char>(portStr[i])))
+			throw std::runtime_error("Invalid port number in listen: " + portStr);
+	}
+
+	// manual conversion with bounds check
+	long value = 0;
+	for (size_t i = 0; i < portStr.size(); ++i)
+	{
+		value = value * 10 + (portStr[i] - '0');
+		if (value > 65535)
+			throw std::runtime_error("Port out of range in listen: " + portStr);
+	}
+	if (value <= 0)
+		throw std::runtime_error("Port out of range in listen: " + portStr);
+
+	return static_cast<int>(value);
+}
+
+void configParser::validatePortString(const std::string &portStr)
+{
+	if (portStr.empty())
+		throw std::runtime_error("Empty port in listen directive");
+
+	if (portStr.find_first_not_of("0123456789") != std::string::npos)
+		throw std::runtime_error("Invalid port number in listen: " + portStr);
+
+	// further numeric bounds will be checked during conversion (parsePortFromString)
+}
+
+void configParser::parseListen(ServerConfig &cfg, int &port)
+{
 	advance();
-	std::stringstream ss(current.value);
-	ss >> port;
 	if (current.type != WORD)
-		throw std::runtime_error("Expected port number");
-	cfg.listenPorts.push_back(port);
-	advance();
+		throw std::runtime_error("Expected port or address:port after listen");
+
+	std::string token = current.value;
+	std::pair<std::string,std::string> parts = splitAddressPort(token);
+	std::string addr = parts.first;
+	std::string portStr = parts.second;
+
+	// validate port and address
+	validatePortString(portStr);
+	validateAddress(addr);
+
+	int p = parsePortFromString(portStr);
+	port = p;
+
+	ListenConfig lc;
+	lc.IP = addr;
+	lc.port = port;
+	cfg.listenConfigs.push_back(lc);
+
+	advance(); // consume token
 	expect(SEMICOLON);
 }
 
