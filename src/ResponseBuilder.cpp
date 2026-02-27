@@ -68,10 +68,10 @@ void ResponseBuilder::addCookies()
 // Accept-ranges: bytes tells browser etc that our web server supports range
 // requests, i.e browser can pause and resume downloads, or jump around in a
 // video player
-void ResponseBuilder::buildResponse(const std::string &uri)
+void ResponseBuilder::buildResponse(RouteResult &route)
 {
 	std::ostringstream body;
-	std::ifstream	   requestFile(uri.c_str());
+	std::ifstream	   requestFile(route.filePath.c_str());
 
 	// if the requested file could not be opened
 	if (requestFile.good() == false)
@@ -82,21 +82,10 @@ void ResponseBuilder::buildResponse(const std::string &uri)
 	body << requestFile.rdbuf();
 	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
 	addCookies();
-	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(uri)
+	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(route.filePath)
 					<< "\r\nAccept-Ranges: bytes\r\n";
-
-	if (mMax == 0)
-		mMax = body.str().size() - 1;
-
-	if (mStatus == 206)
-	{
-		std::string newbody = body.str().substr(mMin, mMax - mMin + 1);
-		mResponseStream << "Content-Range: bytes " << mMin << "-" << mMax << "/"
-						<< body.str().size();
-		mResponseStream << "\r\nContent-Length: " << mMax - mMin + 1;
-		mResponseStream << "\r\n\r\n" << newbody;
-	}
-	else if (mParser->getMethod() == GET)
+	addConnectionField(route.keepAlive);
+	if (mParser->getMethod() == GET)
 	{
 		mResponseStream << "Content-Length: " << body.str().size();
 		mResponseStream << "\r\n\r\n" << body.str();
@@ -131,8 +120,8 @@ void ResponseBuilder::buildPartialResponse(RouteResult &out)
 	std::string partialBody = body.str().substr(out.partialOffset, out.partialLength + 1);
 
 	LOG_DEBUG("response body size: " + numToString(newbody.size()));
-	mResponseStream << "Content-Range: bytes " << out.partialOffset << "-" << out.partialLength + out.partialOffset << "/"
-					<< body.str().size();
+	mResponseStream << "Content-Range: bytes " << out.partialOffset << "-"
+					<< out.partialLength + out.partialOffset << "/" << body.str().size();
 	mResponseStream << "\r\nContent-Length: " << out.partialLength + 1;
 	mResponseStream << "\r\n\r\n" << partialBody;
 
@@ -176,6 +165,12 @@ void ResponseBuilder::buildErrorResponse(RouteResult &route)
 	LOG_ERROR("ResponseBuilder: Error status: " + numToString(mStatus) + ": " + route.bodyMsg);
 	LOG_DEBUG(mResponse);
 	mResponseReady = true;
+}
+
+void ResponseBuilder::addConnectionField(bool keepAlive)
+{
+	if (keepAlive == false)
+		mResponseStream << "Connection: close\r\n";
 }
 
 void ResponseBuilder::buildSimpleResponse(int status, const std::string &msg)

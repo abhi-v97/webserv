@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <netinet/in.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
@@ -17,7 +18,7 @@ ClientHandler::ClientHandler(int		   socketFd,
 							 Listener	  *listener,
 							 Dispatcher	  *dispatch)
 	: mSocketFd(socketFd), mRequest(), mClientIp(), mBytesSent(0), mParser(), mResponseObj(),
-	  mCgiObj(), mIsCgi(false), mIsCgiDone(false), mPipeFd(0), mRequestNum(0), mConfig(srv),
+	  mIsCgi(false), mIsCgiDone(false), mCgiFd(0), mRequestNum(0), mConfig(srv),
 	  mDispatch(dispatch), mListener(listener)
 {
 	mParser.mResponse = &mResponseObj;
@@ -52,6 +53,7 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 				mBytesSent = 0;
 				mIsCgi = false;
 				mIsCgiDone = false;
+				mCgiStart = NULL;
 				mParser.reset();
 				mResponseObj.reset();
 				parseRequest();
@@ -122,6 +124,7 @@ bool ClientHandler::generateResponse()
 		return (false);
 
 	RouteResult route = mDispatch->getRouter().route(mParser, mConfig, mSession);
+	route.keepAlive = mParser.getKeepAliveRequest();
 	setSession(route);
 	if (route.type == RR_ERROR)
 	{
@@ -133,15 +136,16 @@ bool ClientHandler::generateResponse()
 	}
 	else if (route.type == RR_GET)
 	{
-		mResponseObj.buildResponse(route.filePath);
+		mResponseObj.buildResponse(route);
 	}
 	else if (route.type == RR_PARTIAL)
 		mResponseObj.buildPartialResponse(route);
-	else if (route.type == RR_CGI)
+	else if (route.type == RR_CGI || route.type == RR_CGI_POST)
 	{
 		mIsCgi = true;
 		mResponseObj.mResponseReady = true;
-		mDispatch->createCgiHandler(this);
+		mDispatch->createCgiHandler(this, route);
+		mCgiStart = time(NULL);
 	}
 	else
 	{
@@ -155,7 +159,15 @@ bool ClientHandler::sendResponse()
 	ssize_t bytes = 0;
 
 	if (mIsCgi == true && mIsCgiDone == false)
-		return (false);
+	{
+		if (time(NULL) - mCgiStart > 60)
+		{
+			mResponseObj.buildSimpleResponse(500, "CGI Timeout Error");
+			mDispatch->closeCgi(mCgiFd);
+		}
+		else
+			return (false);
+	}
 	if (mIsCgi == true)
 	{
 		bytes = send(mSocketFd,
@@ -253,12 +265,17 @@ void ClientHandler::setCgiReady(bool status)
 	this->mIsCgiDone = status;
 }
 
-void ClientHandler::setCgiFd(int pipeFd)
+void ClientHandler::setCgiFd(int cgiFd)
 {
-	this->mPipeFd = pipeFd;
+	this->mCgiFd = cgiFd;
 }
 
 std::string &ClientHandler::getResponse()
 {
 	return (this->mResponseObj.mResponse);
+}
+
+const std::string &ClientHandler::getRequestBody() const
+{
+	return (this->mParser.getBodyFile());
 }

@@ -7,9 +7,9 @@
 #include <sys/poll.h>
 #include <vector>
 
-#include "Listener.hpp"
 #include "ClientHandler.hpp"
 #include "IHandler.hpp"
+#include "Listener.hpp"
 #include "RequestManager.hpp"
 #include "configParser.hpp"
 
@@ -34,15 +34,16 @@ public:
 	Dispatcher();
 	~Dispatcher();
 
-	bool		   setListeners();
-	void		   createListener(int port, ServerConfig srv);
-	void		   createClientHandler(int socketFd, ServerConfig *srv, Listener *listener);
-	void		   createCgiHandler(ClientHandler *client);
-	void		   removeClient(int fd);
-	Session		  *addSession(std::string sessionId);
-	Session		  *getSession(const std::string &sessionId);
-	void		   deleteSession(const std::string &sessionId);
+	bool			setListeners();
+	void			createListener(int port, ServerConfig srv);
+	void			createClientHandler(int socketFd, ServerConfig *srv, Listener *listener);
+	void			createCgiHandler(ClientHandler *client, RouteResult &route);
+	void			removeHandler(int &pollNum);
+	Session		   *addSession(std::string sessionId);
+	Session		   *getSession(const std::string &sessionId);
+	void			deleteSession(const std::string &sessionId);
 	RequestManager &getRouter();
+	void			closeCgi(int cgiFd);
 
 	void loop();
 

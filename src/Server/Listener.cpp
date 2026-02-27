@@ -109,3 +109,8 @@ const std::string &Listener::getIp() const
 {
 	return (this->mClientIp);
 }
+
+int Listener::getPort() const
+{
+	return (ntohs(this->mSocketAddress.sin_port));
+}

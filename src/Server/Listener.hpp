@@ -22,11 +22,12 @@ public:
 	Listener(int port, ServerConfig srv, Dispatcher *dispatch);
 	~Listener();
 
-	void handleEvents(struct pollfd &pollStruct);
-	int	 getFd() const;
-	bool getKeepAlive() const;
+	void			   handleEvents(struct pollfd &pollStruct);
+	int				   getFd() const;
+	bool			   getKeepAlive() const;
 	const std::string &getIp() const;
-	bool bindPort();
+	bool			   bindPort();
+	int				   getPort() const;
 
 private:
 	std::string	 mClientIp;

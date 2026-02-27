@@ -7,6 +7,7 @@
 #include "Dispatcher.hpp"
 #include "IHandler.hpp"
 #include "Logger.hpp"
+#include "RequestManager.hpp"
 #include "configParser.hpp"
 
 #define MAX_LISTEN_REQUESTS 8
@@ -70,8 +71,8 @@ void Dispatcher::loop()
 				 it != mSessions.end();
 				 it++)
 			{
-				// inactive for 30 minutes or more
-				if (timeNow - it->second->lastAccessed > 1)
+				// inactive for 15 minutes or more
+				if (timeNow - it->second->lastAccessed > 900)
 				{
 					delete it->second;
 					mSessions.erase(it);
@@ -88,7 +89,7 @@ void Dispatcher::loop()
 			if (mPollFds[i].revents != 0)
 				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i]);
 			if (mHandler[mPollFds[i].fd]->getKeepAlive() == false)
-				removeClient(i);
+				removeHandler(i);
 		}
 	}
 }
@@ -123,20 +124,28 @@ void Dispatcher::createClientHandler(int socketFd, ServerConfig *srv, Listener *
 	mPollFds.push_back(pollFdStruct);
 }
 
-void Dispatcher::createCgiHandler(ClientHandler *client)
+void Dispatcher::createCgiHandler(ClientHandler *client, RouteResult &route)
 {
 	IHandler *cgi = new CgiHandler(client);
 
-	if (static_cast<CgiHandler *>(cgi)->execute("hello.py") == false)
+	if (static_cast<CgiHandler *>(cgi)->execute(route) == false)
 	{
 		delete cgi;
 		return;
 	}
-	int cgiFd = cgi->getFd();
+	if (route.type == RR_CGI_POST)
+	{
+		int cgiInFd = static_cast<CgiHandler *>(cgi)->getInFd();
+		
+		mHandler[cgiInFd] = cgi;
+		struct pollfd pollInFdStruct = {cgiInFd, POLLOUT, 0};
+		mPollFds.push_back(pollInFdStruct);
+	}
 
-	mHandler[cgiFd] = cgi;
-	struct pollfd pollFdStruct = {cgiFd, POLLIN, 0};
-	client->setCgiFd(cgiFd);
+	int cgiOutFd = static_cast<CgiHandler *>(cgi)->getOutFd();
+	mHandler[cgiOutFd] = cgi;
+	struct pollfd pollFdStruct = {cgiOutFd, POLLIN, 0};
+	client->setCgiFd(cgiOutFd);
 	mPollFds.push_back(pollFdStruct);
 }
 
@@ -164,15 +173,37 @@ bool Dispatcher::setListeners()
 	return (true);
 }
 
-void Dispatcher::removeClient(int pollNum)
+void Dispatcher::removeHandler(int &pollNum)
 {
 	int clientFd = mPollFds[pollNum].fd;
 
+	if (dynamic_cast<CgiHandler *>(mHandler[clientFd]))
+	{
+		LOG_INFO(std::string("closing CGI handler: ") + numToString(clientFd));
+		std::map<int, IHandler *>::iterator mit = mHandler.find(clientFd);
+		
+		for (int i = mPollFds.size(); i >= 0; i--)
+		{
+			std::map<int, IHandler *>::iterator it = mHandler.find(mPollFds[i].fd);
+			std::vector<int> fds;
+			if (it != mHandler.end() && it->second == mit->second)
+			{
+				LOG_INFO(std::string("closing CGI handler: ") + numToString(mPollFds[i].fd));
+				mPollFds.erase(mPollFds.begin() + i);
+				mHandler.erase(mPollFds[i].fd);
+			}
+		}
+		delete mHandler[clientFd];
+		pollNum = -1;
+		return ;
+	}
 	LOG_NOTICE(std::string("closing connection ") + numToString(clientFd));
 	delete mHandler[clientFd];
 	mHandler.erase(clientFd);
 	mPollFds.erase(mPollFds.begin() + pollNum);
 	close(clientFd);
+
+	
 }
 
 Session *Dispatcher::addSession(std::string sessionId)
@@ -190,6 +221,11 @@ Session *Dispatcher::addSession(std::string sessionId)
 Session *Dispatcher::getSession(const std::string &sessionId)
 {
 	return (this->mSessions[sessionId]);
+}
+
+void Dispatcher::closeCgi(int cgiFd)
+{
+	mHandler[cgiFd]->mKeepAlive = false;
 }
 
 void Dispatcher::deleteSession(const std::string &sessionId)
