@@ -28,7 +28,7 @@ public:
 	ResponseBuilder();
 	~ResponseBuilder();
 
-	void		buildResponse(const std::string &uri);
+	void		buildResponse(RouteResult &route);
 	void		buildPartialResponse(RouteResult &out);
 	void		buildErrorResponse(RouteResult &route);
 	void		buildSimpleResponse(int status, const std::string &msg);
@@ -52,6 +52,7 @@ private:
 	std::ostringstream mResponseStream;
 
 	void addCookies();
+	void addConnectionField(bool keepAlive);
 };
 
 #endif

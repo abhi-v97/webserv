@@ -22,14 +22,17 @@ enum RequestRoute
 	RR_NOTSET,
 	RR_BASIC,
 	RR_GET,
+	RR_HEAD,
 	RR_PARTIAL,
 	RR_CGI,
+	RR_CGI_POST,
 	RR_ERROR,
 };
 
 struct RouteResult
 {
 	enum RequestRoute type;
+	bool			  keepAlive;
 	int				  status;
 	int				  locIndex;
 	size_t			  partialLength;

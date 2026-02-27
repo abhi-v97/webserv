@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <iostream>
-#include <stdexcept>
 
 #include "Dispatcher.hpp"
 #include "Logger.hpp"
@@ -29,6 +28,7 @@ RouteResult RequestManager::route(RequestParser &parser, ServerConfig *srv, Sess
 	const std::string &uri = parser.getUri();
 
 	result.status = 200;
+	result.keepAlive = false;
 	result.partialLength = 0;
 	result.partialOffset = 0;
 	mIsCgi = isCgi(uri, result);
@@ -76,7 +76,11 @@ bool RequestManager::validateRequest(RequestParser &parser, ServerConfig *srv, R
 		return (false);
 	if (mIsCgi == true)
 	{
-		out.type = RR_CGI;
+		if (method == POST)
+		{
+			out.type = RR_CGI_POST;
+			return (true);
+		}
 		return (true);
 	}
 	if (method == GET)
@@ -209,7 +213,8 @@ void RequestManager::parseRangeHeader(RequestParser &parser, RouteResult &out)
 
 		out.partialOffset = std::atoi(rangeStr.c_str() + equal + 1);
 		out.partialLength = std::atoi(rangeStr.c_str() + dash + 1) - out.partialOffset;
-		LOG_DEBUG("fileOffset: " + numToString(out.fileOffset) + "; fileLength: " + numToString(out.fileLength));
+		LOG_DEBUG("fileOffset: " + numToString(out.fileOffset) +
+				  "; fileLength: " + numToString(out.fileLength));
 	}
 }
 

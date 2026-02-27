@@ -28,10 +28,11 @@ public:
 
 	int				mSocketFd;
 	int				mRequestNum;
-	int				mPipeFd;
+	int				mCgiFd;
 	bool			mIsCgi;
 	bool			mIsCgiDone;
 	ssize_t			mBytesSent;
+	time_t 			mCgiStart;
 	std::string		mRequest;
 	std::string		mClientIp;
 	ServerConfig   *mConfig;
@@ -39,16 +40,16 @@ public:
 	Listener	   *mListener;
 	RequestParser	mParser;
 	ResponseBuilder mResponseObj;
-	CgiHandler	   *mCgiObj;
 	Session		   *mSession;
 
-	void		 setCgiFd(int pipeFd);
+	void		 setCgiFd(int cgiFd);
 	void		 setCgiReady(bool status);
 	void		 handleEvents(struct pollfd &pollStruct);
 	std::string &getResponse();
 
 	bool getKeepAlive() const;
 	int	 getFd() const;
+	const std::string &getRequestBody() const;
 
 private:
 	void readSocket();

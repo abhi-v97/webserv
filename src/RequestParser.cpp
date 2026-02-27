@@ -246,11 +246,11 @@ bool RequestParser::parseBody(std::string &request)
 		bodyToFile = false;
 		bodyFd = -1;
 
-		mTempPostFile = numToString(rand()) + ".tmp";
+		mTempPostFile = generateId() + ".tmp";
 		int flags = O_WRONLY | O_CREAT | O_TRUNC;
 		bodyFd = open(mTempPostFile.c_str(), flags, 0644);
 		if (bodyFd < 0)
-			return (handleError(500, "Failed to create the requested resource"), false);
+			return (handleError(500, "Failed to create a temporary file"), false);
 		setNonBlockingFlag(bodyFd);
 	}
 
