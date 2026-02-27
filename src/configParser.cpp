@@ -99,6 +99,8 @@ void configParser::parseClientMaxBodySize(ServerConfig &cfg)
 	if (current.type != WORD)
 		throw std::runtime_error("Expected max body size value");
 	std::string val = current.value;
+    if (val.empty())
+        throw std::runtime_error("Empty value for client_max_body_size");
 	char unit = val[val.size() - 1];
 	long multiplier = 1;
 	if (unit == 'K' || unit == 'k')
@@ -218,8 +220,7 @@ void configParser::parseListen(ServerConfig &cfg, int &port)
 	validatePortString(portStr);
 	validateAddress(addr);
 
-	int p = parsePortFromString(portStr);
-	port = p;
+	port = parsePortFromString(portStr);
 
 	ListenConfig lc;
 	lc.IP = addr;

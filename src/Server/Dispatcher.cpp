@@ -61,9 +61,9 @@ void Dispatcher::loop()
 	If the bind was successful (might fail if port is already in use), adds the created object to
 	map mHandler
 */
-void Dispatcher::createListener(int port)
+void Dispatcher::createListener(const std::string &ip, int port)
 {
-	IHandler *listener = new Listener(port, this);
+	IHandler *listener = new Listener(ip, port, this);
 
 	if (static_cast<Listener *>(listener)->bindPort() == true)
 		mHandler[listener->getFd()] = listener;

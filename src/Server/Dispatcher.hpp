@@ -22,7 +22,7 @@ public:
 	~Dispatcher();
 
 	bool setListeners();
-	void createListener(int port);
+	void createListener(const std::string &ip, int port);
 	void createClient(int listenFd);
 	void createCgiHandler(ClientHandler *client);
 	void removeClient(int fd);
