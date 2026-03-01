@@ -1,12 +1,14 @@
 #include <csignal>
+#include <cstring>
 #include <sys/socket.h>
 
 #include "CgiHandler.hpp"
 #include "ClientHandler.hpp"
 #include "Dispatcher.hpp"
 #include "IHandler.hpp"
-#include "Listener.hpp"
 #include "Logger.hpp"
+#include "RequestManager.hpp"
+#include "configParser.hpp"
 
 #define MAX_LISTEN_REQUESTS 8
 
@@ -15,7 +17,7 @@
 */
 int gSignal = 0;
 
-Dispatcher::Dispatcher()
+Dispatcher::Dispatcher(): mRequestManager(this)
 {
 }
 
@@ -28,42 +30,79 @@ Dispatcher::~Dispatcher()
 		delete mHandler[mPollFds[i].fd];
 		close(mPollFds[i].fd);
 	}
+	for (std::map<std::string, Session *>::iterator it = mSessions.begin(); it != mSessions.end();
+		 it++)
+	{
+		if (it->second)
+			delete it->second;
+	}
+	mSessions.clear();
 }
 
 void Dispatcher::loop()
 {
 	std::signal(SIGINT, SIG_IGN);
 	std::signal(SIGINT, signalHandler);
+	time_t nextReap = time(NULL) + 900;
+
 	while (gSignal == 0)
 	{
-		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), 1);
+		time_t timeNow = time(NULL);
+		int	   timeout = 60; // 60s timeout cap
+		long   remaining = static_cast<long>(nextReap - timeNow);
+
+		if (remaining < 1)
+			timeout = 1;
+		else if (remaining < timeout)
+			timeout = static_cast<int>(remaining);
+
+		int pollNum = poll(mPollFds.data(), static_cast<int>(mPollFds.size()), timeout * 1000);
 		if (pollNum < 0)
 		{
-			if (gSignal == SIGINT)
-				return;
-			LOG_FATAL(std::string("poll() failed: ") + std::strerror(errno));
+			if (gSignal != SIGINT)
+				LOG_FATAL(std::string("loop(): poll() failed: ") + std::strerror(errno));
+			return;
 		}
+		// reaper, delete inactive sessions every 15 minutes (900 secs)
+		timeNow += timeout;
+		if (timeNow >= nextReap)
+		{
+			for (std::map<std::string, Session *>::iterator it = mSessions.begin();
+				 it != mSessions.end();
+				 it++)
+			{
+				// inactive for 15 minutes or more
+				if (timeNow - it->second->lastAccessed > 900)
+				{
+					delete it->second;
+					mSessions.erase(it);
+				}
+			}
+			nextReap = timeNow + 900;
+		}
+		// poll timed out, if no fds were ready, continue to next poll
+		if (pollNum == 0)
+			continue;
+		// web server main event loop
 		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
 		{
 			if (mPollFds[i].revents != 0)
 				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i]);
 			if (mHandler[mPollFds[i].fd]->getKeepAlive() == false)
-			{
-				removeClient(i);
-			}
+				removeHandler(i);
 		}
 	}
 }
 
 /**
-	\brief factory method to create a listener handler for each port
+	\brief factory method to create a Listener handler for each port
 
 	If the bind was successful (might fail if port is already in use), adds the created object to
 	map mHandler
 */
-void Dispatcher::createListener(const std::string &ip, int port)
+void Dispatcher::createListener(const std::string &ip, int port, ServerConfig srv)
 {
-	IHandler *listener = new Listener(ip, port, this);
+	IHandler *listener = new Listener(ip, port, srv, this);
 
 	if (static_cast<Listener *>(listener)->bindPort() == true)
 		mHandler[listener->getFd()] = listener;
@@ -74,34 +113,39 @@ void Dispatcher::createListener(const std::string &ip, int port)
 /**
 	\brief factory method to add a new client to poll loop
 */
-void Dispatcher::createClient(int listenFd)
+void Dispatcher::createClientHandler(int socketFd, ServerConfig *srv, Listener *listener)
 {
-	IHandler *client = new ClientHandler();
+	IHandler *client = new ClientHandler(socketFd, srv, listener, this);
 
-	if (static_cast<ClientHandler *>(client)->acceptSocket(listenFd, this) == false)
-	{
-		delete client;
+	if (!client)
 		return;
-	}
-	mHandler[client->getFd()] = client;
-	struct pollfd pollFdStruct = {client->getFd(), POLLIN, 0};
+	mHandler[socketFd] = client;
+	struct pollfd pollFdStruct = {socketFd, POLLIN, 0};
 	mPollFds.push_back(pollFdStruct);
 }
 
-void Dispatcher::createCgiHandler(ClientHandler *client)
+void Dispatcher::createCgiHandler(ClientHandler *client, RouteResult &route)
 {
 	IHandler *cgi = new CgiHandler(client);
 
-	if (static_cast<CgiHandler *>(cgi)->execute("hello.py") == false)
+	if (static_cast<CgiHandler *>(cgi)->execute(route) == false)
 	{
 		delete cgi;
 		return;
 	}
-	int cgiFd = cgi->getFd();
+	if (route.type == RR_CGI_POST)
+	{
+		int cgiInFd = static_cast<CgiHandler *>(cgi)->getInFd();
 
-	mHandler[cgiFd] = cgi;
-	struct pollfd pollFdStruct = {cgiFd, POLLIN, 0};
-	client->setCgiFd(cgiFd);
+		mHandler[cgiInFd] = cgi;
+		struct pollfd pollInFdStruct = {cgiInFd, POLLOUT, 0};
+		mPollFds.push_back(pollInFdStruct);
+	}
+
+	int cgiOutFd = static_cast<CgiHandler *>(cgi)->getOutFd();
+	mHandler[cgiOutFd] = cgi;
+	struct pollfd pollFdStruct = {cgiOutFd, POLLIN, 0};
+	client->setCgiFd(cgiOutFd);
 	mPollFds.push_back(pollFdStruct);
 }
 
@@ -129,14 +173,65 @@ bool Dispatcher::setListeners()
 	return (true);
 }
 
-void Dispatcher::removeClient(int pollNum)
+void Dispatcher::removeHandler(int &pollNum)
 {
 	int clientFd = mPollFds[pollNum].fd;
 
+	if (dynamic_cast<CgiHandler *>(mHandler[clientFd]))
+	{
+		LOG_INFO(std::string("closing CGI handler: ") + numToString(clientFd));
+		std::map<int, IHandler *>::iterator mit = mHandler.find(clientFd);
+
+		for (int i = mPollFds.size(); i >= 0; i--)
+		{
+			std::map<int, IHandler *>::iterator it = mHandler.find(mPollFds[i].fd);
+			std::vector<int> fds;
+			if (it != mHandler.end() && it->second == mit->second)
+			{
+				LOG_INFO(std::string("closing CGI handler: ") + numToString(mPollFds[i].fd));
+				mPollFds.erase(mPollFds.begin() + i);
+				mHandler.erase(mPollFds[i].fd);
+			}
+		}
+		delete mHandler[clientFd];
+		pollNum = -1;
+		return ;
+	}
 	LOG_NOTICE(std::string("closing connection ") + numToString(clientFd));
 	delete mHandler[clientFd];
 	mHandler.erase(clientFd);
 	mPollFds.erase(mPollFds.begin() + pollNum);
+	close(clientFd);
+
+
+}
+
+Session *Dispatcher::addSession(std::string sessionId)
+{
+	Session *newSession = new Session();
+	time_t	 now = time(NULL);
+
+	newSession->lastAccessed = now;
+	newSession->timeCreated = now;
+	newSession->user = "";
+	mSessions[sessionId] = newSession;
+	return (newSession);
+}
+
+Session *Dispatcher::getSession(const std::string &sessionId)
+{
+	return (this->mSessions[sessionId]);
+}
+
+void Dispatcher::closeCgi(int cgiFd)
+{
+	mHandler[cgiFd]->mKeepAlive = false;
+}
+
+void Dispatcher::deleteSession(const std::string &sessionId)
+{
+	delete mSessions[sessionId];
+	mSessions.erase(sessionId);
 }
 
 /**
@@ -148,4 +243,9 @@ void Dispatcher::removeClient(int pollNum)
 void signalHandler(int sig)
 {
 	gSignal = sig;
+}
+
+RequestManager &Dispatcher::getRouter()
+{
+	return (mRequestManager);
 }

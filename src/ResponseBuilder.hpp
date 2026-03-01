@@ -4,29 +4,55 @@
 #include <cerrno>
 #include <cstring>
 #include <sstream>
+#include <string>
+
+#include "configParser.hpp"
 
 class RequestParser;
+struct RouteResult;
 
+// TODO: instead of ClientHandler accessing the response through mResponse, maybe just pass
+// mResponseStream instead?
+
+// TODO: instead of each ClientHandler having a response object, just make one in Dispatch and have
+// each ClientHandler access it since its mostly stateless
+
+/**
+	\class ResponseBuilder
+
+	Class that generates a HTTP response based on validity of the request
+*/
 class ResponseBuilder
 {
 public:
 	ResponseBuilder();
 	~ResponseBuilder();
 
-	void reset();
-
-	std::string buildResponse(const std::string &uri);
+	void		buildResponse(RouteResult &route);
+	void		buildPartialResponse(RouteResult &out);
+	void		buildErrorResponse(RouteResult &route);
+	void		buildSimpleResponse(int status, const std::string &msg);
 	bool		readCgiResponse(int pipeOutFd);
-	void		parseRangeHeader(RequestParser &parser);
-
+	void		setError(int code, const std::string &error);
+	void		setSessionId(const std::string &id);
 	std::string getResponse();
-	size_t		mMin;
-	size_t		mMax;
-	size_t		mStatus;
+	void		reset();
+
+	bool		   mResponseReady;
+	bool		   mNewSession;
+	size_t		   mMin;
+	size_t		   mMax;
+	size_t		   mStatus;
+	std::string	   mResponse;
+	std::string	   mSessionId;
+	RequestParser *mParser;
+	ServerConfig  *mConfig;
 
 private:
-	std::stringstream mResponse;
+	std::ostringstream mResponseStream;
+
+	void addCookies();
+	void addConnectionField(bool keepAlive);
 };
 
-#endif /* ************************************************* RESPONSEBUILDER_H                      \
-		*/
+#endif

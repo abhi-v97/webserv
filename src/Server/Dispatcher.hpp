@@ -1,11 +1,24 @@
 #pragma once
+
 #include <cstddef>
+#include <ctime>
 #include <map>
+#include <string>
 #include <sys/poll.h>
 #include <vector>
 
 #include "ClientHandler.hpp"
 #include "IHandler.hpp"
+#include "Listener.hpp"
+#include "RequestManager.hpp"
+#include "configParser.hpp"
+
+struct Session
+{
+	std::string user;
+	time_t		timeCreated;
+	time_t		lastAccessed;
+};
 
 /**
 	\class Dispatcher
@@ -21,18 +34,25 @@ public:
 	Dispatcher();
 	~Dispatcher();
 
-	bool setListeners();
-	void createListener(const std::string &ip, int port);
-	void createClient(int listenFd);
-	void createCgiHandler(ClientHandler *client);
-	void removeClient(int fd);
+	bool			setListeners();
+	void			createListener(const std::string &ip, int port, ServerConfig srv);
+	void			createClientHandler(int socketFd, ServerConfig *srv, Listener *listener);
+	void			createCgiHandler(ClientHandler *client, RouteResult &route);
+	void			removeHandler(int &pollNum);
+	Session		   *addSession(std::string sessionId);
+	Session		   *getSession(const std::string &sessionId);
+	void			deleteSession(const std::string &sessionId);
+	RequestManager &getRouter();
+	void			closeCgi(int cgiFd);
 
 	void loop();
 
 private:
-	size_t					  mListenCount;
-	std::vector<pollfd>		  mPollFds;
-	std::map<int, IHandler *> mHandler;
+	size_t							 mListenCount;
+	std::vector<pollfd>				 mPollFds;
+	std::map<int, IHandler *>		 mHandler;
+	std::map<std::string, Session *> mSessions;
+	RequestManager					 mRequestManager;
 };
 
 void signalHandler(int sig);

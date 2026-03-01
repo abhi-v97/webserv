@@ -4,7 +4,9 @@
 #include <iostream>
 #include <unistd.h>
 
+#include "Logger.hpp"
 #include "MimeTypes.hpp"
+#include "RequestManager.hpp"
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
 
@@ -14,7 +16,8 @@
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-ResponseBuilder::ResponseBuilder(): mResponse(), mMin(0), mMax(0), mStatus(200)
+ResponseBuilder::ResponseBuilder()
+	: mResponseReady(false), mNewSession(false), mResponseStream(), mMin(0), mMax(0), mStatus(200)
 {
 }
 
@@ -32,12 +35,29 @@ ResponseBuilder::~ResponseBuilder()
 
 std::string ResponseBuilder::getResponse()
 {
-	return mResponse.str();
+	return mResponseStream.str();
 }
 
 void ResponseBuilder::reset()
 {
+	mStatus = 200;
+	mMin = 0;
+	mMax = 0;
+	mResponseReady = false;
+	mNewSession = false;
 	mResponse.clear();
+	mResponseStream.clear();
+	mResponseStream.str("");
+	mSessionId.clear();
+}
+
+void ResponseBuilder::addCookies()
+{
+	mResponseStream << "Set-Cookie: last-accessed=" << getTimestamp() << "; Path=/;\r\n";
+	mResponseStream << "Set-Cookie: total-requests=" << mParser->getRequestCount()
+					<< "; Path=/;\r\n";
+	if (mNewSession == true)
+		mResponseStream << "Set-Cookie: session=" << mSessionId << "; Path=/;\r\n";
 }
 
 // simple response to a GET request
@@ -48,37 +68,65 @@ void ResponseBuilder::reset()
 // Accept-ranges: bytes tells browser etc that our web server supports range
 // requests, i.e browser can pause and resume downloads, or jump around in a
 // video player
-std::string ResponseBuilder::buildResponse(const std::string &uri)
+void ResponseBuilder::buildResponse(RouteResult &route)
 {
-	std::string file = "www";
-
-	file.append(uri);
-
-	std::ifstream	   requestFile(file.c_str());
-	std::ostringstream response;
 	std::ostringstream body;
+	std::ifstream	   requestFile(route.filePath.c_str());
 
+	// if the requested file could not be opened
+	if (requestFile.good() == false)
+	{
+		buildSimpleResponse(500, "The requested file could not be accessed");
+		return;
+	}
 	body << requestFile.rdbuf();
-	response << "HTTP/1.1 " << mStatus
-			 << " 0K\r\nContent-Type: " << MimeTypes::getInstance()->getType(uri)
-			 << "\r\nAccept-Ranges: bytes\r\n";
-
-	if (mMax == 0)
-		mMax = body.str().size() - 1;
-
-	if (mStatus == 206)
+	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
+	addCookies();
+	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(route.filePath)
+					<< "\r\nAccept-Ranges: bytes\r\n";
+	addConnectionField(route.keepAlive);
+	if (mParser->getMethod() == GET)
 	{
-		std::string newbody = body.str().substr(mMin, mMax - mMin + 1);
-		response << "Content-Range: bytes " << mMin << "-" << mMax << "/" << body.str().size();
-		response << "\r\nContent-Length: " << mMax - mMin + 1;
-		response << "\r\n\r\n" << newbody;
+		mResponseStream << "Content-Length: " << body.str().size();
+		mResponseStream << "\r\n\r\n" << body.str();
 	}
-	else
+	mResponse = mResponseStream.str();
+	mResponseReady = true;
+}
+
+// TODO: optimise this, use something like the stat() function instead of
+// loading the entire file into memory
+void ResponseBuilder::buildPartialResponse(RouteResult &out)
+{
+	std::ostringstream body;
+	std::ifstream	   requestFile(out.filePath.c_str());
+
+	// if the requested file could not be opened
+	if (requestFile.good() == false)
 	{
-		response << "Content-Length: " << body.str().size();
-		response << "\r\n\r\n" << body.str();
+		buildSimpleResponse(500, "The requested file could not be accessed");
+		return;
 	}
-	return response.str();
+	body << requestFile.rdbuf();
+	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
+	addCookies();
+	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(out.filePath)
+					<< "\r\nAccept-Ranges: bytes\r\n";
+
+	// if request doesn't give a max number, set it to end of the file
+	if (out.partialLength == 0)
+		out.partialLength = body.str().size() - 1;
+
+	std::string partialBody = body.str().substr(out.partialOffset, out.partialLength + 1);
+
+	LOG_DEBUG("response body size: " + numToString(newbody.size()));
+	mResponseStream << "Content-Range: bytes " << out.partialOffset << "-"
+					<< out.partialLength + out.partialOffset << "/" << body.str().size();
+	mResponseStream << "\r\nContent-Length: " << out.partialLength + 1;
+	mResponseStream << "\r\n\r\n" << partialBody;
+
+	mResponse = mResponseStream.str();
+	mResponseReady = true;
 }
 
 bool ResponseBuilder::readCgiResponse(int pipeOutFd)
@@ -94,33 +142,50 @@ bool ResponseBuilder::readCgiResponse(int pipeOutFd)
 		body << buffer;
 		len = read(pipeOutFd, buffer, BUFFER_SIZE);
 	}
-	mResponse << "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " << body.str().size()
-			  << body.str();
-	std::cout << mResponse.str() << std::endl;
-
+	mResponseStream << "HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: "
+					<< body.str().size() << "\r\n\r\n"
+					<< body.str();
 	// returns true if len isn't positive, meaning read is finished
-	return len <= 0;
+	return (len <= 0);
 }
 
-void ResponseBuilder::parseRangeHeader(RequestParser &parser)
+// TODO: add connection: close in response header when applicable
+// TODO: add a function that writes the name of the error code based on what error occurred next to
+// the Error code, so for 404 it returns "Not Found", for 500 its "Internal Server Error"
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
+void ResponseBuilder::buildErrorResponse(RouteResult &route)
 {
-	std::string rangeStr;
+	mStatus = route.status;
+	mResponseStream << "HTTP/1.1 " << numToString(mStatus)
+					<< "\r\nContent-Type: text/html\r\nContent-Length: "
+					<< numToString(80 + route.bodyMsg.size())
+					<< "\r\n\r\n<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
+					<< numToString(mStatus) << "</h2><p> " << route.bodyMsg << "</p></html>";
+	mResponse = mResponseStream.str();
+	LOG_ERROR("ResponseBuilder: Error status: " + numToString(mStatus) + ": " + route.bodyMsg);
+	LOG_DEBUG(mResponse);
+	mResponseReady = true;
+}
 
-	rangeStr = parser.getHeaders()["range"];
+void ResponseBuilder::addConnectionField(bool keepAlive)
+{
+	if (keepAlive == false)
+		mResponseStream << "Connection: close\r\n";
+}
 
-	if (rangeStr.empty())
-	{
-		mStatus = 200;
-		return;
-	}
-	else
-	{
-		mStatus = 206;
-		size_t equal = rangeStr.find_first_of('=');
-		size_t dash = rangeStr.find_first_of('-');
+void ResponseBuilder::buildSimpleResponse(int status, const std::string &msg)
+{
+	mResponseStream << "HTTP/1.1 " << numToString(status)
+					<< "\r\nContent-Type: text/plain\r\nContent-Length: " << numToString(msg.size())
+					<< "\r\n\r\n"
+					<< msg;
+	mResponse = mResponseStream.str();
+	LOG_DEBUG(mResponse);
+	mResponseReady = true;
+}
 
-		mMin = std::atoi(rangeStr.c_str() + equal + 1);
-		mMax = std::atoi(rangeStr.c_str() + dash + 1);
-		std::cout << "minStr: " << mMin << ", maxStr: " << mMax << std::endl;
-	}
+void ResponseBuilder::setSessionId(const std::string &id)
+{
+	mSessionId = id;
+	mNewSession = true;
 }

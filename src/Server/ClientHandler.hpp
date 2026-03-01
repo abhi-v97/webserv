@@ -4,12 +4,15 @@
 #include <sys/poll.h>
 #include <unistd.h>
 
+#include "Listener.hpp"
 #include "CgiHandler.hpp"
 #include "IHandler.hpp"
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
+#include "configParser.hpp"
 
 class Dispatcher;
+struct Session;
 
 /**
 	\class ClientHandler
@@ -20,36 +23,39 @@ class Dispatcher;
 class ClientHandler: public IHandler
 {
 public:
-	ClientHandler();
+	ClientHandler(int socketFd, ServerConfig *srv, Listener *listener, Dispatcher *dispatch);
 	~ClientHandler();
 
 	int				mSocketFd;
-	std::string		mRequest;
-	std::string		mResponse;
-	std::string		mClientIp;
-	ssize_t			mBytesSent;
-	ssize_t			mBytesRead;
-	RequestParser	mParser;
-	ResponseBuilder mResponseObj;
-	CgiHandler	   *mCgiObj;
-	bool			mResponseReady;
+	int				mRequestNum;
+	int				mCgiFd;
 	bool			mIsCgi;
 	bool			mIsCgiDone;
+	ssize_t			mBytesSent;
+	time_t 			mCgiStart;
+	std::string		mRequest;
+	std::string		mClientIp;
+	ServerConfig   *mConfig;
 	Dispatcher	   *mDispatch;
-	int				mPipeFd;
+	Listener	   *mListener;
+	RequestParser	mParser;
+	ResponseBuilder mResponseObj;
+	Session		   *mSession;
 
-	bool acceptSocket(int listenFd, Dispatcher *dispatch);
-	void setCgiFd(int pipeFd);
-	void setCgiReady(bool status);
-	void handleEvents(struct pollfd &pollStruct);
-
-	bool		 getKeepAlive() const;
-	int			 getFd() const;
+	void		 setCgiFd(int cgiFd);
+	void		 setCgiReady(bool status);
+	void		 handleEvents(struct pollfd &pollStruct);
 	std::string &getResponse();
+
+	bool getKeepAlive() const;
+	int	 getFd() const;
+	const std::string &getRequestBody() const;
 
 private:
 	void readSocket();
 	bool parseRequest();
-	bool sendResponse();
+	void setSession(RouteResult &out);
+
 	bool generateResponse();
+	bool sendResponse();
 };

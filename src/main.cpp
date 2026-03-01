@@ -7,6 +7,8 @@ int main(int argc, char **argv)
 {
 	std::string configFile;
 
+	srand(time(0));
+
 	if (argc < 2)
 		configFile = "default.conf";
 	else
@@ -16,13 +18,10 @@ int main(int argc, char **argv)
 	std::vector<ServerConfig> srv;
 
 	srv = parser.servers;
-	for (std::vector<ServerConfig>::iterator sit = srv.begin(); sit != srv.end(); ++sit)
+	for (std::vector<ServerConfig>::iterator serverIter = srv.begin(); serverIter != srv.end(); serverIter++)
 	{
-		for (std::vector<ListenConfig>::iterator lit = sit->listenConfigs.begin(); lit != sit->listenConfigs.end(); ++lit)
-		{
-			dispatch.createListener(lit->IP, lit->port);
-			// dispatch.createListener(lit->IP, lit->port);
-		}
+		for (std::vector<ListenConfig>::iterator lit = serverIter->listenConfigs.begin(); lit != serverIter->listenConfigs.end(); ++lit)
+			dispatch.createListener(lit->IP, lit->port, *serverIter);
 	}
 
 	if (dispatch.setListeners() == false)

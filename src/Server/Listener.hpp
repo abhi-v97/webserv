@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 
 #include "IHandler.hpp"
+#include "configParser.hpp"
 
 class Dispatcher;
 
@@ -11,7 +12,7 @@ class Dispatcher;
 
 	Concrete class derived from IHandler.
 
-	Responsible for creating new listener sockets for each port specified in config file.
+	Responsible for creating new listen sockets for each port specified in config file.
 	handleEvents() is triggered when a new connection is requested by a client on the object's port,
 	results in a new client connection added to Reactor loop.
 */
@@ -19,17 +20,22 @@ class Listener: public IHandler
 {
 public:
 	Listener();
-	Listener(const std::string &ip, int port, Dispatcher *dispatch);
+	Listener(const std::string &ip, int port, ServerConfig srv, Dispatcher *dispatch);
 	~Listener();
 
-	void newConnection();
-	void handleEvents(struct pollfd &pollStruct);
-	int	 getFd() const;
-	bool getKeepAlive() const;
-	bool bindPort();
+	void			   handleEvents(struct pollfd &pollStruct);
+	int				   getFd() const;
+	bool			   getKeepAlive() const;
+	const std::string &getIp() const;
+	bool			   bindPort();
+	int				   getPort() const;
 
 private:
-	int			mSocket;
-	sockaddr_in mSocketAddress;
-	Dispatcher *mDispatch;
+	std::string	 mClientIp;
+	int			 mSocketFd;
+	sockaddr_in	 mSocketAddress;
+	Dispatcher	*mDispatch;
+	ServerConfig mConfig;
+
+	bool newConnection();
 };
