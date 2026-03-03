@@ -80,6 +80,7 @@ void ResponseBuilder::buildResponse(RouteResult &route)
 		return;
 	}
 	body << requestFile.rdbuf();
+	mStatus = route.status;
 	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
 	addCookies();
 	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(route.filePath)
@@ -96,10 +97,10 @@ void ResponseBuilder::buildResponse(RouteResult &route)
 
 // TODO: optimise this, use something like the stat() function instead of
 // loading the entire file into memory
-void ResponseBuilder::buildPartialResponse(RouteResult &out)
+void ResponseBuilder::buildPartialResponse(RouteResult &route)
 {
 	std::ostringstream body;
-	std::ifstream	   requestFile(out.filePath.c_str());
+	std::ifstream	   requestFile(route.filePath.c_str());
 
 	// if the requested file could not be opened
 	if (requestFile.good() == false)
@@ -108,45 +109,27 @@ void ResponseBuilder::buildPartialResponse(RouteResult &out)
 		return;
 	}
 	body << requestFile.rdbuf();
+	mStatus = route.status;
 	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
 	addCookies();
-	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(out.filePath)
+	addConnectionField(route.keepAlive);
+	mResponseStream << "Content-Type: " << MimeTypes::getInstance()->getType(route.filePath)
 					<< "\r\nAccept-Ranges: bytes\r\n";
 
 	// if request doesn't give a max number, set it to end of the file
-	if (out.partialLength == 0)
-		out.partialLength = body.str().size() - 1;
+	if (route.partialLength == 0)
+		route.partialLength = body.str().size() - 1;
 
-	std::string partialBody = body.str().substr(out.partialOffset, out.partialLength + 1);
+	std::string partialBody = body.str().substr(route.partialOffset, route.partialLength + 1);
 
 	LOG_DEBUG("response body size: " + numToString(newbody.size()));
-	mResponseStream << "Content-Range: bytes " << out.partialOffset << "-"
-					<< out.partialLength + out.partialOffset << "/" << body.str().size();
-	mResponseStream << "\r\nContent-Length: " << out.partialLength + 1;
+	mResponseStream << "Content-Range: bytes " << route.partialOffset << "-"
+					<< route.partialLength + route.partialOffset << "/" << body.str().size();
+	mResponseStream << "\r\nContent-Length: " << route.partialLength + 1;
 	mResponseStream << "\r\n\r\n" << partialBody;
 
 	mResponse = mResponseStream.str();
 	mResponseReady = true;
-}
-
-bool ResponseBuilder::readCgiResponse(int pipeOutFd)
-{
-	std::ostringstream body;
-
-	char buffer[BUFFER_SIZE];
-	memset(buffer, 0, BUFFER_SIZE);
-
-	ssize_t len = read(pipeOutFd, buffer, BUFFER_SIZE);
-	while (len > 0)
-	{
-		body << buffer;
-		len = read(pipeOutFd, buffer, BUFFER_SIZE);
-	}
-	mResponseStream << "HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: "
-					<< body.str().size() << "\r\n\r\n"
-					<< body.str();
-	// returns true if len isn't positive, meaning read is finished
-	return (len <= 0);
 }
 
 // TODO: add connection: close in response header when applicable
@@ -191,6 +174,7 @@ void ResponseBuilder::addConnectionField(bool keepAlive)
 
 void ResponseBuilder::buildSimpleResponse(int status, const std::string &msg)
 {
+	mStatus = status;
 	mResponseStream << "HTTP/1.1 " << numToString(status)
 					<< "\r\nContent-Type: text/plain\r\nContent-Length: " << numToString(msg.size())
 					<< "\r\n\r\n"

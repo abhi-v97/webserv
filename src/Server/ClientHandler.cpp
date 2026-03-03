@@ -221,6 +221,12 @@ void ClientHandler::setSession(RouteResult &out)
 		{
 			// TODO: check for invalid session ID
 		}
+		else if (!mSession)
+		{
+			mSession = session;
+			session->lastAccessed = now;
+			sessionFound = true;
+		}
 		else if (mSession != session)
 		{
 			// TODO: wrong session ID provided, send an error and close connection

@@ -185,7 +185,7 @@ void Dispatcher::removeHandler(int &pollNum)
 		for (int i = mPollFds.size(); i >= 0; i--)
 		{
 			std::map<int, IHandler *>::iterator it = mHandler.find(mPollFds[i].fd);
-			std::vector<int> fds;
+			std::vector<int>					fds;
 			if (it != mHandler.end() && it->second == mit->second)
 			{
 				LOG_INFO(std::string("closing CGI handler: ") + numToString(mPollFds[i].fd));
@@ -195,15 +195,13 @@ void Dispatcher::removeHandler(int &pollNum)
 		}
 		delete mHandler[clientFd];
 		pollNum = -1;
-		return ;
+		return;
 	}
 	LOG_NOTICE(std::string("closing connection ") + numToString(clientFd));
 	delete mHandler[clientFd];
 	mHandler.erase(clientFd);
 	mPollFds.erase(mPollFds.begin() + pollNum);
 	close(clientFd);
-
-
 }
 
 Session *Dispatcher::addSession(std::string sessionId)
