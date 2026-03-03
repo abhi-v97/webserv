@@ -26,6 +26,7 @@ enum RequestRoute
 	RR_PARTIAL,
 	RR_CGI,
 	RR_CGI_POST,
+	RR_AUTOINDEX,
 	RR_ERROR,
 };
 
@@ -69,6 +70,10 @@ private:
 					 RequestParser	   &parser,
 					 ServerConfig	   *srv,
 					 RouteResult	   &out);
+	bool validateAutoIndex(const std::string &uri,
+						   RequestParser	 &parser,
+						   ServerConfig		 *srv,
+						   RouteResult		 &out);
 	bool validateRequest(RequestParser &parser, ServerConfig *srv, RouteResult &out);
 	bool checkMethod(RequestParser &parser, ServerConfig *srv, RouteResult &out);
 	void setError(int status, const std::string &bodyMsg, RouteResult &out);
