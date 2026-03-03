@@ -26,7 +26,6 @@ public:
 	int	 getOutFd() const;
 	void handleEvents(struct pollfd &pollStruct);
 	bool getKeepAlive() const;
-	void terminateCgi();
 
 private:
 	std::map<std::string, std::string> m_header;

@@ -143,18 +143,17 @@ bool RequestManager::checkPermissions(RequestMethod method, RouteResult &out)
 	}
 	else if (method == GET && access(uri.c_str(), R_OK))
 	{
-		// TODO: test, see what nginx does whena requested file has no read permission
-		setError(403, "Failed to read resource", out);
+		setError(403, "Failed to read resource: Missing permissions", out);
 		return (false);
 	}
 	else if (method == DELETE && access(uri.c_str(), W_OK))
 	{
-		setError(403, "Failed to delete resource", out);
+		setError(403, "Failed to delete resource: Missing permissions", out);
 		return (false);
 	}
 	else if (mIsCgi == true && access(uri.c_str(), X_OK))
 	{
-		setError(403, "Failed to execute resource", out);
+		setError(403, "Failed to execute resource: Missing permissions", out);
 		return (false);
 	}
 	return (true);

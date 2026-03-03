@@ -202,8 +202,6 @@ void Dispatcher::removeHandler(int &pollNum)
 	mHandler.erase(clientFd);
 	mPollFds.erase(mPollFds.begin() + pollNum);
 	close(clientFd);
-
-	
 }
 
 Session *Dispatcher::addSession(std::string sessionId)

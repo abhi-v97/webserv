@@ -21,7 +21,6 @@ RequestParser::~RequestParser()
 {
 }
 
-// TODO: refactor, add logic to reduce amount of erases
 bool RequestParser::parse(std::string &requestBuffer)
 {
 	std::string buffer;
@@ -84,8 +83,11 @@ bool RequestParser::parse(std::string &requestBuffer)
 		if (parseBody(requestBuffer) == false)
 			return (false);
 	}
-	requestBuffer.erase(0, mParsePos);
-	mParsePos = 0;
+	if (mParsePos > 0)
+	{
+		requestBuffer.erase(0, mParsePos);
+		mParsePos = 0;
+	}
 	return (true);
 }
 
@@ -105,8 +107,7 @@ bool RequestParser::parseHeader(const std::string &header)
 	mRequestUri = header.substr(methodEnd + 1, uriEnd - methodEnd - 1);
 	if (validateUri(mRequestUri) == false)
 		return (handleError(400, "parseHeader(): invalid URI format, must begin with / or http://"),
-				false); // TODO: read the RFC again, see how URI is formatted, make a note of it
-						// somewhere
+				false);
 
 	// extract version
 	int versionEnd = header.find_first_of('\r', uriEnd + 1);
@@ -304,8 +305,6 @@ bool RequestParser::validateUri(const std::string &uri)
 	return (false);
 }
 
-// TODO: optional: http1.1 also supports a keep-alive header field, where client
-// can specify how many further requests to accept before closing
 // Returns false if HTTP version is 1.0 as it did not support persistent connections
 // Also returns false if client requested connection to be closed
 bool RequestParser::getKeepAliveRequest()
@@ -334,7 +333,7 @@ bool RequestParser::getEncoding()
 	return (false);
 }
 
-std::string const &RequestParser::getBodyFile() const
+const std::string &RequestParser::getBodyFile() const
 {
 	return (this->mTempPostFile);
 }

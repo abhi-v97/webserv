@@ -49,7 +49,7 @@ public:
 
 	bool getKeepAlive() const;
 	int	 getFd() const;
-	const std::string &getRequestBody() const;
+	const std::string &getRequestBodyFile() const;
 
 private:
 	void readSocket();

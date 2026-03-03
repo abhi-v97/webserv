@@ -20,9 +20,10 @@ Listener::Listener(int port, ServerConfig srv, Dispatcher *dispatch)
 
 Listener::~Listener()
 {
+	LOG_INFO("Closing Listener at port: " + numToString(ntohs(mSocketAddress.sin_port)));
+	close(mSocketFd);
 }
 
-// TODO: handle requestClose for Listener events
 void Listener::handleEvents(pollfd &pollStruct)
 {
 	if (pollStruct.revents & POLLIN)
