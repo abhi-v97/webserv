@@ -13,7 +13,7 @@
 RequestParser::RequestParser()
 	: mMethod(UNKNOWN), bodyToFile(false), mParsingFinished(false), mChunkedRequest(false),
 	  bodyFd(-1), bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mParsePos(0), mChunkSize(0),
-	  mClientNum(), mStatusCode(200), mState(HEADER)
+	  mClientNum(), mStatusCode(200), mRequestCount(0), mState(HEADER)
 {
 }
 
