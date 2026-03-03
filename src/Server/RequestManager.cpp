@@ -37,6 +37,33 @@ RouteResult RequestManager::route(RequestParser &parser, ServerConfig *srv, Sess
 	return (result);
 }
 
+bool RequestManager::validateAutoIndex(const std::string &uri,
+									   RequestParser	 &parser,
+									   ServerConfig		 *srv,
+									   RouteResult		 &out)
+{
+	std::vector<LocationConfig> &locs = srv->locations;
+
+	std::string indexFile = out.filePath + "index.html";
+	if (!access(indexFile.c_str(), F_OK))
+	{
+		out.filePath.clear();
+		out.filePath = indexFile;
+		return (validateRequest(parser, srv, out));
+	}
+	if (locs[out.locIndex].autoindex == false)
+	{
+		setError(403, "Auto indexing not allowed for this location", out);
+		return (false);
+	}
+	else
+	{
+		out.type = RR_AUTOINDEX;
+		return (true);
+	}
+	return (false);
+}
+
 // TODO: update this to search deeper than one folder level
 bool RequestManager::validateUri(const std::string &uri,
 								 RequestParser	   &parser,
@@ -55,7 +82,11 @@ bool RequestManager::validateUri(const std::string &uri,
 		if (folder == locs[j].path)
 		{
 			out.locIndex = j;
-			out.filePath = locs[j].root + uri;
+			out.filePath = srv->root + uri;
+			std::string::const_iterator it = uri.end();
+			it--;
+			if (*it == '/')
+				return (validateAutoIndex(uri, parser, srv, out));
 			return (validateRequest(parser, srv, out));
 		}
 	}

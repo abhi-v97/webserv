@@ -167,6 +167,22 @@ void ResponseBuilder::buildErrorResponse(RouteResult &route)
 	mResponseReady = true;
 }
 
+void ResponseBuilder::buildAutoIndex(RouteResult &route)
+{
+	std::string dirPath = route.filePath.substr(0, route.filePath.find_last_of('/'));
+	std::string autoIndexBody = mAutoIndex.generatePage(dirPath, route.filePath);
+
+	mStatus = route.status;
+	mResponseStream << "HTTP/1.1 " << mStatus << "\r\n";
+	addCookies();
+	mResponseStream << "Content-Type: text/html\r\nAccept-Ranges: bytes\r\n";
+	addConnectionField(route.keepAlive);
+	mResponseStream << "Content-Length: " << autoIndexBody.size();
+	mResponseStream << "\r\n\r\n" << autoIndexBody;
+	mResponse = mResponseStream.str();
+	mResponseReady = true;
+}
+
 void ResponseBuilder::addConnectionField(bool keepAlive)
 {
 	if (keepAlive == false)

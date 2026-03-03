@@ -21,6 +21,7 @@ ClientHandler::ClientHandler(int		   socketFd,
 	  mIsCgi(false), mIsCgiDone(false), mCgiFd(0), mRequestNum(0), mConfig(srv),
 	  mDispatch(dispatch), mListener(listener)
 {
+	mSession = NULL;
 	mParser.mResponse = &mResponseObj;
 	mResponseObj.mParser = &mParser;
 	mParser.mClient = this;
@@ -165,6 +166,10 @@ bool ClientHandler::generateResponse()
 		mResponseObj.mResponseReady = true;
 		mDispatch->createCgiHandler(this, route);
 		mCgiStart = time(NULL);
+	}
+	else if (route.type == RR_AUTOINDEX)
+	{
+		mResponseObj.buildAutoIndex(route);
 	}
 	else
 	{

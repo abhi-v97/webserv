@@ -6,6 +6,7 @@
 #include <sstream>
 #include <string>
 
+#include "AutoIndex.hpp"
 #include "configParser.hpp"
 
 class RequestParser;
@@ -32,7 +33,7 @@ public:
 	void		buildPartialResponse(RouteResult &out);
 	void		buildErrorResponse(RouteResult &route);
 	void		buildSimpleResponse(int status, const std::string &msg);
-	bool		readCgiResponse(int pipeOutFd);
+	void		buildAutoIndex(RouteResult &route);
 	void		setError(int code, const std::string &error);
 	void		setSessionId(const std::string &id);
 	std::string getResponse();
@@ -50,6 +51,7 @@ public:
 
 private:
 	std::ostringstream mResponseStream;
+	AutoIndex		   mAutoIndex;
 
 	void addCookies();
 	void addConnectionField(bool keepAlive);
