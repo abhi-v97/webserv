@@ -19,7 +19,8 @@ class Dispatcher;
 class Listener: public IHandler
 {
 public:
-	Listener(int port, ServerConfig srv, Dispatcher *dispatch);
+	Listener();
+	Listener(const std::string &ip, int port, ServerConfig srv, Dispatcher *dispatch);
 	~Listener();
 
 	void			   handleEvents(struct pollfd &pollStruct);
