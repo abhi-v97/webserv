@@ -7,7 +7,7 @@ CFLAGS = -g -std=c++98 -march=native -fno-limit-debug-info
 OBJ_DIR = obj
 SRC_DIR = src
 
-SRC := $(shell find $(SRC_DIR) -type f -name '*.cpp')
+SRC := $(shell find $(SRC_DIR) -type f -name '*.cpp' ! -path '$(SRC_DIR)/tools/*')
 OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC))
 
 TMP_SRC_DIRS = ${shell find ${SRC_DIR} -type d}

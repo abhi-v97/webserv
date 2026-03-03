@@ -35,7 +35,7 @@ public:
 	~Dispatcher();
 
 	bool			setListeners();
-	void			createListener(int port, ServerConfig srv);
+	void			createListener(const std::string &ip, int port, ServerConfig srv);
 	void			createClientHandler(int socketFd, ServerConfig *srv, Listener *listener);
 	void			createCgiHandler(ClientHandler *client, RouteResult &route);
 	void			removeHandler(int &pollNum);

@@ -100,9 +100,9 @@ void Dispatcher::loop()
 	If the bind was successful (might fail if port is already in use), adds the created object to
 	map mHandler
 */
-void Dispatcher::createListener(int port, ServerConfig srv)
+void Dispatcher::createListener(const std::string &ip, int port, ServerConfig srv)
 {
-	IHandler *listener = new Listener(port, srv, this);
+	IHandler *listener = new Listener(ip, port, srv, this);
 
 	if (static_cast<Listener *>(listener)->bindPort() == true)
 		mHandler[listener->getFd()] = listener;
@@ -136,7 +136,7 @@ void Dispatcher::createCgiHandler(ClientHandler *client, RouteResult &route)
 	if (route.type == RR_CGI_POST)
 	{
 		int cgiInFd = static_cast<CgiHandler *>(cgi)->getInFd();
-		
+
 		mHandler[cgiInFd] = cgi;
 		struct pollfd pollInFdStruct = {cgiInFd, POLLOUT, 0};
 		mPollFds.push_back(pollInFdStruct);
@@ -181,7 +181,7 @@ void Dispatcher::removeHandler(int &pollNum)
 	{
 		LOG_INFO(std::string("closing CGI handler: ") + numToString(clientFd));
 		std::map<int, IHandler *>::iterator mit = mHandler.find(clientFd);
-		
+
 		for (int i = mPollFds.size(); i >= 0; i--)
 		{
 			std::map<int, IHandler *>::iterator it = mHandler.find(mPollFds[i].fd);
@@ -203,7 +203,7 @@ void Dispatcher::removeHandler(int &pollNum)
 	mPollFds.erase(mPollFds.begin() + pollNum);
 	close(clientFd);
 
-	
+
 }
 
 Session *Dispatcher::addSession(std::string sessionId)

@@ -1,4 +1,12 @@
 #include "configParser.hpp"
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <stdexcept>
+#include <string>
+#include <set>
 
 configParser::configParser(const std::string &filename) : input(readFile(filename)), lexer(input) {
 	advance();
@@ -44,7 +52,7 @@ void	configParser::advance()
 		current = lexer.getNextToken();
 }
 
-void    configParser::expect(configTokenType type)
+void	configParser::expect(configTokenType type)
 {
 	if (current.type != type)
 		throw std::runtime_error("Unexpected token: " + current.value);
@@ -64,112 +72,216 @@ ServerConfig	configParser::parseServerBlock()
 	while (current.type != RBRACE && current.type != END)
 	{
 		if (current.type == WORD && current.value == "listen")
-		{
-			advance();
-			std::stringstream ss(current.value);
-			ss >> port;
-			if (current.type != WORD)
-				throw std::runtime_error("Expected port number");
-			cfg.listenPorts.push_back(port);
-			advance();
-			expect(SEMICOLON);
-		}
+			configParser::parseListen(cfg, port);
 		else if (current.type == WORD && current.value == "root")
-		{
-			advance();
-			if (current.type != WORD)
-				throw std::runtime_error("Expected root path");
-			cfg.root = current.value;
-			advance();
-			expect(SEMICOLON);
-		}
+			configParser::parseRootDirective(cfg);
 		else if (current.type == WORD && current.value == "server_name")
-		{
-			advance();
-			if (current.type != WORD)
-				throw std::runtime_error("Expected server name");
-			cfg.serverName = current.value;
-			advance();
-			expect(SEMICOLON);
-		}
+			configParser::parseServerName(cfg);
 		else if (current.value == "location")
 		{
 			LocationConfig loc = parseLocationBlock();
 			cfg.locations.push_back(loc);
 		}
 		else if (current.type == WORD && current.value == "error_page")
-		{
-			advance();
-			if (current.type != WORD)
-				throw std::runtime_error("Expected error code");
-			int	code;
-			code = 0;
-			std::stringstream ss(current.value);
-			ss >> code;
-			advance();
-			if (current.type != WORD)
-				throw std::runtime_error("Expected error page path");
-			std::string path = current.value;
-			advance();
-			expect(SEMICOLON);
-			cfg.errorPages[code] = path;
-		}
+			configParser::parseErrorPage(cfg);
 		else if (current.type == WORD && current.value == "client_max_body_size")
-		{
-			advance();
-			if (current.type != WORD)
-	   			throw std::runtime_error("Expected max body size value");
-			std::string val = current.value;
-			char unit = val[val.size() - 1];
-			long multiplier = 1;
-			if (unit == 'K' || unit == 'k')
-			{
-				multiplier = 1024;
-				val = val.substr(0, val.size() - 1);
-			}
-			else if (unit == 'M' || unit == 'm')
-			{
-				multiplier = 1024 * 1024;
-				val = val.substr(0, val.size() - 1);
-			}
-			else if (unit == 'G' || unit == 'g')
-			{
-				multiplier = 1024 * 1024 * 1024;
-				val = val.substr(0, val.size() - 1);
-			}
-			else if (!isdigit(unit))
-				throw std::runtime_error("Invalid size format for client_max_body_size");
-			std::stringstream ss(val);
-			long number;
-			ss >> number;
-			if (ss.fail() || number < 0)
-				throw std::runtime_error("Invalid number in client_max_body_size");
-			cfg.clientMaxBodySize = number * multiplier;
-			std::cout << cfg.clientMaxBodySize << std::endl; 
-			advance();
-			expect(SEMICOLON);
-		}
-	else
-		throw std::runtime_error("Unknown directive: " + current.value);
-}
+			configParser::parseClientMaxBodySize(cfg);
+		else
+			throw std::runtime_error("Unknown directive: " + current.value);
+	}
 	expect(RBRACE);
 	return (cfg);
 }
 
+void configParser::parseClientMaxBodySize(ServerConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected max body size value");
+	std::string val = current.value;
+    if (val.empty())
+        throw std::runtime_error("Empty value for client_max_body_size");
+	char unit = val[val.size() - 1];
+	long multiplier = 1;
+	if (unit == 'K' || unit == 'k')
+	{
+		multiplier = 1024;
+		val = val.substr(0, val.size() - 1);
+	}
+	else if (unit == 'M' || unit == 'm')
+	{
+		multiplier = 1024 * 1024;
+		val = val.substr(0, val.size() - 1);
+	}
+	else if (unit == 'G' || unit == 'g')
+	{
+		multiplier = 1024 * 1024 * 1024;
+		val = val.substr(0, val.size() - 1);
+	}
+	else if (!isdigit(unit))
+		throw std::runtime_error("Invalid size format for client_max_body_size");
+	std::stringstream ss(val);
+	long number;
+	ss >> number;
+	if (ss.fail() || number < 0)
+		throw std::runtime_error("Invalid number in client_max_body_size");
+	cfg.clientMaxBodySize = number * multiplier;
+	std::cout << cfg.clientMaxBodySize << std::endl; 
+	advance();
+	expect(SEMICOLON);
+}
+
+void configParser::parseErrorPage(ServerConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected error code");
+	int	code;
+	code = 0;
+	std::stringstream ss(current.value);
+	ss >> code;
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected error page path");
+	std::string path = current.value;
+	advance();
+	expect(SEMICOLON);
+	cfg.errorPages[code] = path;
+}
+
+std::pair<std::string,std::string> configParser::splitAddressPort(const std::string &token)
+{
+	std::size_t colon = token.find(':');
+	if (colon == std::string::npos)
+		return std::make_pair(std::string("127.0.0.1"), token);
+	std::string addr = token.substr(0, colon);
+	std::string portStr = token.substr(colon + 1);
+	return std::make_pair(addr, portStr);
+}
+
+void configParser::validateAddress(const std::string &addr)
+{
+	// only accept valid IPv4 here
+	struct in_addr ina;
+	if (addr.empty())
+		throw std::runtime_error("Empty address in listen directive");
+	if (inet_pton(AF_INET, addr.c_str(), &ina) != 1)
+		throw std::runtime_error("Invalid listen address: " + addr);
+}
+
+static int parsePortFromString(const std::string &portStr)
+{
+	if (portStr.empty())
+		throw std::runtime_error("Empty port in listen directive");
+
+	for (size_t i = 0; i < portStr.size(); ++i)
+	{
+		if (!std::isdigit(static_cast<unsigned char>(portStr[i])))
+			throw std::runtime_error("Invalid port number in listen: " + portStr);
+	}
+
+	// manual conversion with bounds check
+	long value = 0;
+	for (size_t i = 0; i < portStr.size(); ++i)
+	{
+		value = value * 10 + (portStr[i] - '0');
+		if (value > 65535)
+			throw std::runtime_error("Port out of range in listen: " + portStr);
+	}
+	if (value <= 0)
+		throw std::runtime_error("Port out of range in listen: " + portStr);
+
+	return static_cast<int>(value);
+}
+
+void configParser::validatePortString(const std::string &portStr)
+{
+	if (portStr.empty())
+		throw std::runtime_error("Empty port in listen directive");
+
+	if (portStr.find_first_not_of("0123456789") != std::string::npos)
+		throw std::runtime_error("Invalid port number in listen: " + portStr);
+
+	// further numeric bounds will be checked during conversion (parsePortFromString)
+}
+
+void configParser::parseListen(ServerConfig &cfg, int &port)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected port or address:port after listen");
+
+	std::string token = current.value;
+	std::pair<std::string,std::string> parts = splitAddressPort(token);
+	std::string addr = parts.first;
+	std::string portStr = parts.second;
+
+	// validate port and address
+	validatePortString(portStr);
+	validateAddress(addr);
+
+	port = parsePortFromString(portStr);
+
+	ListenConfig lc;
+	lc.IP = addr;
+	lc.port = port;
+	cfg.listenConfigs.push_back(lc);
+
+	advance(); // consume token
+	expect(SEMICOLON);
+}
+
+void	configParser::parseRootDirective(ServerConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected root path");
+	cfg.root = current.value;
+	advance();
+	expect(SEMICOLON);
+}
+
+void configParser::parseServerName(ServerConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected server name");
+	cfg.serverName = current.value;
+	advance();
+	expect(SEMICOLON);
+}
+
 void	configParser::parseConfig()
 {
+	std::set<int> usedPorts;
 	while (current.type != END)
 	{
 		ServerConfig server = parseServerBlock();
+
+		// check for duplicate ports across previously parsed server blocks
+		for (size_t i = 0; i < server.listenConfigs.size(); ++i)
+		{
+			int p = server.listenConfigs[i].port;
+			if (usedPorts.find(p) != usedPorts.end())
+			{
+				std::stringstream ss;
+				ss << "Duplicate listen port across server blocks: " << p;
+				throw std::runtime_error(ss.str());
+			}
+		}
+
+		// register this server's ports as used
+		for (size_t i = 0; i < server.listenConfigs.size(); ++i)
+			usedPorts.insert(server.listenConfigs[i].port);
+
 		this->servers.push_back(server);
 	}
 }
-
 LocationConfig	configParser::parseLocationBlock()
 {
-	LocationConfig	loc;
-
+	LocationConfig loc = LocationConfig();
 	loc.redirectErr = 0;
+	loc.cgiEnabled = false;
 	if (current.type != WORD || current.value != "location")
 		throw std::runtime_error("Expected 'location'");
 	advance();
@@ -188,27 +300,9 @@ LocationConfig	configParser::parseLocationBlock()
 			expect(SEMICOLON);
 		}
 		else if (current.value == "autoindex")
-		{
-			advance();
-			if (current.value == "on")
-				loc.autoindex = true;
-			else if (current.value == "off")
-				loc.autoindex = false;
-			else
-				throw std::runtime_error("Expected 'on' or 'off' after autoindex");
-			advance();
-			expect(SEMICOLON);
-		}
+			parseAutoindex(loc);
 		else if (current.value == "allow_methods")
-		{
-			advance();
-			while (current.type == WORD)
-			{
-				loc.methods.push_back(current.value);
-				advance();
-			}
-			expect(SEMICOLON);
-		}
+			parseAllowMethods(loc);
 		else if (current.value == "index")
 		{
 			advance();
@@ -224,7 +318,18 @@ LocationConfig	configParser::parseLocationBlock()
 			expect(SEMICOLON);
 		}
 		else if (current.value == "return")
-		{
+			configParser::parseReturn(loc);
+		else if (current.value == "cgi")
+			parseCgiBlock(loc);
+		else
+			throw std::runtime_error("Unknown directive in location: " + current.value);
+	}
+	expect(RBRACE);
+	return (loc);
+}
+
+void configParser::parseReturn(LocationConfig &loc)
+{
 			advance();
 			if (current.type != WORD)
 				throw std::runtime_error("Expected error code");
@@ -239,10 +344,94 @@ LocationConfig	configParser::parseLocationBlock()
 			expect(SEMICOLON);
 			loc.redirect = returnPage;
 			loc.redirectErr = code;
-		}
+}
+
+void	configParser::parseAutoindex(LocationConfig &loc)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected 'on' or 'off' after autoindex");
+	if (current.value == "on")
+		loc.autoindex = true;
+	else if (current.value == "off")
+		loc.autoindex = false;
+	else
+		throw std::runtime_error("Invalid value for autoindex: " + current.value);
+	advance();
+	expect(SEMICOLON);
+}
+
+void configParser::parseAllowMethods(LocationConfig &loc)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected at least one method after allow_methods");
+
+	while (current.type == WORD)
+	{
+		const std::string &m = current.value;
+		if (m != "GET" && m != "POST" && m != "DELETE")
+			throw std::runtime_error("Invalid method in allow_methods: " + m);
+
+		if (std::find(loc.methods.begin(), loc.methods.end(), m) == loc.methods.end())
+			loc.methods.push_back(m);
+		advance();
+	}
+	expect(SEMICOLON);
+}
+
+void configParser::parseCgiBlock(LocationConfig &loc)
+{
+	advance();
+	expect(LBRACE);
+	CgiConfig cfg;
+	while (current.type != RBRACE && current.type != END)
+	{
+		if (current.value == "cgi_extension")
+			parseCgiExtension(cfg);
+		else if (current.value == "cgi_pass")
+			parseCgiPass(cfg);
+		else if (current.value == "cgi_param")
+			parseCgiParam(cfg);
 		else
-			throw std::runtime_error("Unknown directive in location: " + current.value);
+			throw std::runtime_error("Unknown directive in cgi block: " + current.value);
 	}
 	expect(RBRACE);
-	return (loc);
+	loc.cgis.push_back(cfg);
+	loc.cgiEnabled = true;
+}
+
+void configParser::parseCgiExtension(CgiConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected CGI extension after cgi_extension");
+	cfg.extension = current.value;
+	advance();
+	expect(SEMICOLON);
+}
+
+void configParser::parseCgiPass(CgiConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected program/path after cgi_pass");
+	cfg.pass = current.value;
+	advance();
+	expect(SEMICOLON);
+}
+
+void configParser::parseCgiParam(CgiConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected name after cgi_param");
+	std::string key = current.value;
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected value after cgi_param " + key);
+	std::string value = current.value;
+	cfg.params[key] = value;
+	advance();
+	expect(SEMICOLON);
 }

@@ -6,7 +6,7 @@
 int main(int argc, char **argv)
 {
 	std::string configFile;
-	
+
 	srand(time(0));
 
 	if (argc < 2)
@@ -20,9 +20,8 @@ int main(int argc, char **argv)
 	srv = parser.servers;
 	for (std::vector<ServerConfig>::iterator serverIter = srv.begin(); serverIter != srv.end(); serverIter++)
 	{
-		std::vector<int> &ports = (*serverIter).listenPorts;
-		for (std::vector<int>::iterator portIter = ports.begin(); portIter != ports.end(); portIter++)
-			dispatch.createListener(*portIter, *serverIter);
+		for (std::vector<ListenConfig>::iterator lit = serverIter->listenConfigs.begin(); lit != serverIter->listenConfigs.end(); ++lit)
+			dispatch.createListener(lit->IP, lit->port, *serverIter);
 	}
 
 	if (dispatch.setListeners() == false)
