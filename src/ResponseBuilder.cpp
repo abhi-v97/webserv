@@ -166,6 +166,18 @@ void ResponseBuilder::buildAutoIndex(RouteResult &route)
 	mResponseReady = true;
 }
 
+void ResponseBuilder::buildRedirect(RouteResult &route)
+{
+	mStatus = route.status;
+	mResponseStream << "HTTP/1.1 " << numToString(mStatus)
+					<< "\r\nContent-Type: text/plain\r\nContent-Length: "
+					<< numToString(34 + route.filePath.size()) << "\r\nLocation: " << route.filePath
+					<< "\r\n\r\nMoved permanently. Redirecting to " << route.filePath;
+	mResponse = mResponseStream.str();
+	LOG_DEBUG(mResponse);
+	mResponseReady = true;
+}
+
 void ResponseBuilder::addConnectionField(bool keepAlive)
 {
 	if (keepAlive == false)
