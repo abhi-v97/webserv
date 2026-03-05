@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <iostream>
+#include <sys/stat.h>
 
 #include "Dispatcher.hpp"
 #include "Logger.hpp"
@@ -12,44 +13,44 @@ RequestManager::RequestManager(Dispatcher *dispatch): mDispatch(dispatch)
 }
 
 // TODO: replace this with a config file setting, use shebang line to execute the file
-bool isCgi(const std::string &uri, RouteResult &out)
+void isCgi(ServerConfig *srv, RouteResult &out)
 {
-	if (uri.find(".py") != std::string::npos || uri.find(".sh") != std::string::npos)
-	{
+	LocationConfig &loc = srv->locations[out.locIndex];
+
+	if (loc.cgiEnabled == true)
 		out.type = RR_CGI;
-		return (true);
-	}
-	return (false);
 }
 
 RouteResult RequestManager::route(RequestParser &parser, ServerConfig *srv, Session *session)
 {
-	RouteResult		   result;
-	const std::string &uri = parser.getUri();
+	RouteResult	 result;
+	std::string &uri = parser.getUri();
 
 	result.status = 200;
 	result.keepAlive = false;
 	result.partialLength = 0;
 	result.partialOffset = 0;
-	mIsCgi = isCgi(uri, result);
 	validateUri(uri, parser, srv, result);
 	parseRangeHeader(parser, result);
 	return (result);
 }
 
-bool RequestManager::validateAutoIndex(const std::string &uri,
-									   RequestParser	 &parser,
-									   ServerConfig		 *srv,
-									   RouteResult		 &out)
+bool RequestManager::serveAutoIndex(std::string	  &uri,
+									RequestParser &parser,
+									ServerConfig  *srv,
+									RouteResult	  &out)
 {
 	std::vector<LocationConfig> &locs = srv->locations;
 
-	std::string indexFile = out.filePath + "index.html";
-	if (!access(indexFile.c_str(), F_OK))
+	if (!locs[out.locIndex].index.empty())
 	{
-		out.filePath.clear();
-		out.filePath = indexFile;
-		return (validateRequest(parser, srv, out));
+		std::string indexFile = out.filePath + locs[out.locIndex].index;
+		if (!access(indexFile.c_str(), F_OK))
+		{
+			out.filePath.clear();
+			out.filePath = indexFile;
+			return (validateRequest(parser, srv, out));
+		}
 	}
 	if (locs[out.locIndex].autoindex == false)
 	{
@@ -61,36 +62,126 @@ bool RequestManager::validateAutoIndex(const std::string &uri,
 		out.type = RR_AUTOINDEX;
 		return (true);
 	}
-	return (false);
+}
+
+bool RequestManager::handleCanonicalPath(RequestParser &parser, ServerConfig *srv, RouteResult &out)
+{
+	std::vector<LocationConfig> &locs = srv->locations;
+	bool						 hasSlash = false;
+	std::string					&filePath = out.filePath;
+
+	std::string::const_iterator it = filePath.end();
+	if (!filePath.empty())
+		it--;
+	if (*it == '/')
+		hasSlash = true;
+
+	struct stat st;
+	if (stat(filePath.c_str(), &st) == 0)
+	{
+		if (S_ISDIR(st.st_mode))
+		{
+			if (hasSlash == false)
+			{
+				out.filePath = parser.getUri();
+				out.filePath += '/';
+				if (parser.getMethod() == GET)
+					out.status = 301;
+				else
+					out.status = 307;
+				out.type = RR_REDIRECT;
+				return (true);
+			}
+			else
+				return (serveAutoIndex(filePath, parser, srv, out));
+		}
+		else
+		{
+			if (hasSlash == true && S_ISREG(st.st_mode))
+			{
+				out.filePath = parser.getUri();
+				out.filePath.erase(filePath.size() - 1, 1);
+				if (parser.getMethod() == GET)
+					out.status = 301;
+				else
+					out.status = 307;
+				out.type = RR_REDIRECT;
+				return (true);
+			}
+			else
+				return (validateRequest(parser, srv, out));
+		}
+	}
+	else
+	{
+		// if stat fails
+		if (!filePath.empty() && hasSlash == true)
+		{
+			filePath.erase(filePath.size() - 1, 1);
+			struct stat st2;
+			if (stat(filePath.c_str(), &st2) == 0 && S_ISREG(st2.st_mode))
+			{
+				out.filePath = parser.getUri();
+				out.filePath.erase(filePath.size() - 1, 1);
+				if (parser.getMethod() == GET)
+					out.status = 301;
+				else
+					out.status = 307;
+				out.type = RR_REDIRECT;
+				return (true);
+			}
+		}
+	}
+	if (parser.getMethod() == POST || parser.getMethod() == DELETE)
+		return (validateRequest(parser, srv, out));
+	setError(404, "File not found", out);
+	return (true);
 }
 
 // TODO: update this to search deeper than one folder level
-bool RequestManager::validateUri(const std::string &uri,
-								 RequestParser	   &parser,
-								 ServerConfig	   *srv,
-								 RouteResult	   &out)
+bool RequestManager::validateUri(std::string   &uri,
+								 RequestParser &parser,
+								 ServerConfig  *srv,
+								 RouteResult   &out)
 {
 	std::vector<LocationConfig> &locs = srv->locations;
 
-	size_t folderEnd = uri.rfind('/');
-	if (folderEnd == std::string::npos || folderEnd == 0)
-		folderEnd = 1;
+	if (uri.empty())
+		uri = "/";
+	// ensure uri starts with '/' for comparison
+	if (uri[0] != '/')
+		uri = std::string("/") + uri;
 
-	std::string folder = uri.substr(0, folderEnd);
-	for (int j = 0; j < locs.size(); j++)
+	int winner = 0;
+	int bestMatch = 0;
+
+	for (int i = 0; i < static_cast<int>(locs.size()); i++)
 	{
-		if (folder == locs[j].path)
+		const std::string &lp = locs[i].path;
+		if (lp.empty())
+			continue;
+
+		// if uri == lp or uri has lp in prefix
+		if (uri.compare(0, lp.size(), lp) == 0)
 		{
-			out.locIndex = j;
-			out.filePath = srv->root + uri;
-			std::string::const_iterator it = uri.end();
-			it--;
-			if (*it == '/')
-				return (validateAutoIndex(uri, parser, srv, out));
-			return (validateRequest(parser, srv, out));
+			if (uri.size() == lp.size() || (uri.size() > lp.size() && uri[lp.size()] == '/'))
+			{
+				if (lp.size() > bestMatch)
+				{
+					bestMatch = lp.size();
+					winner = i;
+				}
+			}
 		}
 	}
-	return (false);
+	out.locIndex = winner;
+	out.filePath = srv->root;
+	// avoid duplicate slashes
+	if (!out.filePath.empty() && uri.at(0) != '/' &&
+		out.filePath.at(out.filePath.size() - 1) != '/')
+		out.filePath += '/';
+	out.filePath += uri;
+	return (handleCanonicalPath(parser, srv, out));
 }
 
 bool RequestManager::validateRequest(RequestParser &parser, ServerConfig *srv, RouteResult &out)
@@ -98,6 +189,7 @@ bool RequestManager::validateRequest(RequestParser &parser, ServerConfig *srv, R
 	const std::string &uri = out.filePath;
 	RequestMethod	   method = parser.getMethod();
 
+	isCgi(srv, out);
 	if (!checkMethod(parser, srv, out))
 	{
 		setError(403, "Method not allowed for this location", out);
@@ -105,7 +197,7 @@ bool RequestManager::validateRequest(RequestParser &parser, ServerConfig *srv, R
 	}
 	if (!checkPermissions(parser.getMethod(), out))
 		return (false);
-	if (mIsCgi == true)
+	if (out.type == RR_CGI)
 	{
 		if (method == POST)
 		{
@@ -182,7 +274,7 @@ bool RequestManager::checkPermissions(RequestMethod method, RouteResult &out)
 		setError(403, "Failed to delete resource: Missing permissions", out);
 		return (false);
 	}
-	else if (mIsCgi == true && access(uri.c_str(), X_OK))
+	else if (out.type == RR_CGI && access(uri.c_str(), X_OK))
 	{
 		setError(403, "Failed to execute resource: Missing permissions", out);
 		return (false);

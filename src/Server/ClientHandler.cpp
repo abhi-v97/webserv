@@ -147,29 +147,23 @@ bool ClientHandler::generateResponse()
 	route.keepAlive = mParser.getKeepAliveRequest();
 	setSession(route);
 	if (route.type == RR_ERROR)
-	{
 		mResponseObj.buildErrorResponse(route);
-	}
 	else if (route.type == RR_BASIC)
-	{
 		mResponseObj.buildSimpleResponse(route.status, route.bodyMsg);
-	}
 	else if (route.type == RR_GET)
-	{
 		mResponseObj.buildResponse(route);
-	}
 	else if (route.type == RR_PARTIAL)
 		mResponseObj.buildPartialResponse(route);
+	else if (route.type == RR_AUTOINDEX)
+		mResponseObj.buildAutoIndex(route);
+	else if (route.type == RR_REDIRECT)
+		mResponseObj.buildRedirect(route);
 	else if (route.type == RR_CGI || route.type == RR_CGI_POST)
 	{
 		mIsCgi = true;
 		mResponseObj.mResponseReady = true;
 		mDispatch->createCgiHandler(this, route);
 		mCgiStart = time(NULL);
-	}
-	else if (route.type == RR_AUTOINDEX)
-	{
-		mResponseObj.buildAutoIndex(route);
 	}
 	else
 	{

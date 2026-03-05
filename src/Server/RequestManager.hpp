@@ -23,6 +23,7 @@ enum RequestRoute
 	RR_BASIC,
 	RR_GET,
 	RR_HEAD,
+	RR_REDIRECT,
 	RR_PARTIAL,
 	RR_CGI,
 	RR_CGI_POST,
@@ -58,7 +59,6 @@ public:
 	void		setBodyFile(const std::string &bodyFile);
 
 private:
-	bool		mIsCgi;
 	Dispatcher *mDispatch;
 
 	bool generateResponse();
@@ -66,16 +66,14 @@ private:
 	bool writePost(const std::string &uri, RequestParser &parser, RouteResult &out);
 	bool deleteMethod(const std::string &uri, RouteResult &out);
 	bool checkPermissions(RequestMethod method, RouteResult &out);
-	bool validateUri(const std::string &uri,
-					 RequestParser	   &parser,
-					 ServerConfig	   *srv,
-					 RouteResult	   &out);
-	bool validateAutoIndex(const std::string &uri,
-						   RequestParser	 &parser,
-						   ServerConfig		 *srv,
-						   RouteResult		 &out);
+	bool validateUri(std::string &uri, RequestParser &parser, ServerConfig *srv, RouteResult &out);
+	bool handleCanonicalPath(RequestParser &parser, ServerConfig *srv, RouteResult &out);
 	bool validateRequest(RequestParser &parser, ServerConfig *srv, RouteResult &out);
 	bool checkMethod(RequestParser &parser, ServerConfig *srv, RouteResult &out);
 	void setError(int status, const std::string &bodyMsg, RouteResult &out);
 	void parseRangeHeader(RequestParser &parser, RouteResult &out);
+	bool serveAutoIndex(std::string	  &uri,
+						RequestParser &parser,
+						ServerConfig  *srv,
+						RouteResult	  &out);
 };
