@@ -27,10 +27,15 @@ ClientHandler::ClientHandler(int		   socketFd,
 	mParser.mClient = this;
 }
 
-ClientHandler::~ClientHandler()
-{
-}
+/**
+	\brief function called when a poll event is fired
 
+	\param pollStruct pollfd struct that triggered the event
+
+	If the event is POLLIN, the client has sent more request data which needs to be processed by
+   RequestParser.
+   If the event is POLLOUT, the client's request is ready to be sent to the socket.
+*/
 void ClientHandler::handleEvents(pollfd &pollStruct)
 {
 	if (pollStruct.revents & POLLIN && mParser.getParsingFinished() == false)
@@ -57,6 +62,7 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 				mCgiStart = NULL;
 				mParser.reset();
 				mResponseObj.reset();
+				// see if another request is queued up
 				parseRequest();
 			}
 			return;
@@ -66,7 +72,9 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 	}
 }
 
-// TODO: add logic for string.reserve to prevent repeat allocs
+/**
+	\brief Attempts to read from the socket looking for new HTTP requests
+*/
 void ClientHandler::readSocket()
 {
 	char	buffer[4096];
@@ -90,9 +98,17 @@ void ClientHandler::readSocket()
 		mKeepAlive = false;
 		return;
 	}
+
+	// reserve capacity
+	if (mRequest.capacity() - mRequest.size() < static_cast<size_t>(bytesRead))
+		mRequest.reserve(mRequest.size() + static_cast<size_t>(bytesRead) + 4096);
 	mRequest.append(buffer, bytesRead);
 }
 
+/**
+	\brief If enough request data has been received, begins the parsing process by handing off the
+   data to RequestParser
+*/
 bool ClientHandler::parseRequest()
 {
 	if (mRequest.empty())
@@ -115,6 +131,11 @@ bool ClientHandler::parseRequest()
 	return (mParser.getParsingFinished());
 }
 
+/**
+	\brief Used as an intermediary function between request parsing and response generation.
+
+	Reads the struct returned by RequestManager and routes the request to the correct destination.
+*/
 bool ClientHandler::generateResponse()
 {
 	if (mIsCgi == true && mIsCgiDone == false)
@@ -124,7 +145,7 @@ bool ClientHandler::generateResponse()
 	if (mParser.getParsingFinished() == false)
 		return (false);
 
-	RouteResult route = mDispatch->getRouter().route(mParser, mConfig, mSession);
+	RouteResult route = mDispatch->getRouter().route(mParser, mConfig);
 	route.keepAlive = mParser.getKeepAliveRequest();
 	setSession(route);
 	if (route.type == RR_ERROR)
@@ -153,6 +174,12 @@ bool ClientHandler::generateResponse()
 	return (true);
 }
 
+/**
+	\brief Sends HTTP Response to the socket if its ready
+
+	If a CGI process has stalled for over a minute, begins the shutdown process and sends an error
+   message instead
+*/
 bool ClientHandler::sendResponse()
 {
 	ssize_t bytes = 0;
@@ -198,6 +225,9 @@ bool ClientHandler::sendResponse()
 	return mBytesSent == mResponseObj.mResponse.size();
 }
 
+/**
+	\brief Session handler, validates the session and refreshes its duration or creates a new one
+*/
 void ClientHandler::setSession(RouteResult &out)
 {
 	bool		 sessionFound = false;
@@ -255,32 +285,59 @@ void ClientHandler::setSession(RouteResult &out)
 	}
 }
 
+/**
+	\brief Returns a boolean instructing dispatcher whether to close the connection or not
+*/
 bool ClientHandler::getKeepAlive() const
 {
 	return (this->mKeepAlive);
 }
 
+/**
+	\brief Returns the socket FD belonging to this particular connection
+*/
 int ClientHandler::getFd() const
 {
 	return (this->mSocketFd);
 }
 
+/**
+	\brief Sets CGI status
+
+	Used by CGI handler to signal the end of parsing/processing and to start sending the response
+*/
 void ClientHandler::setCgiReady(bool status)
 {
 	this->mIsCgiDone = status;
 }
 
+/**
+	\brief stores the CGI fd in a variable
+
+	Used by ClientHandler when CGI times out, the fd is needed to tell Dispatcher which cgi process
+   to shut down
+*/
 void ClientHandler::setCgiFd(int cgiFd)
 {
 	this->mCgiFd = cgiFd;
 }
 
+/**
+	\brief Getter for std::string that holds HTTP Response
+
+	Used by CGI handler to set the response message
+*/
 std::string &ClientHandler::getResponse()
 {
 	return (this->mResponseObj.mResponse);
 }
 
-const std::string &ClientHandler::getRequestBody() const
+/**
+	\brief Getter for temporary file which holds the request body
+
+	Used as a getter by CgiHandler to access HTTP request body for POST requests
+*/
+const std::string &ClientHandler::getRequestBodyFile() const
 {
 	return (this->mParser.getBodyFile());
 }

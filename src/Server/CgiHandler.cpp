@@ -26,6 +26,12 @@ CgiHandler::CgiHandler(ClientHandler *client)
 {
 }
 
+/**
+	\brief destructor for CgiHandler
+
+	Attempts to kill the child process after CGI handling is complete. If the process is
+	unresponsive, a SIGKILL is passed to force close it.
+*/
 CgiHandler::~CgiHandler()
 {
 	if (mPID > 0)
@@ -81,6 +87,12 @@ CgiHandler::~CgiHandler()
 ** --------------------------------- METHODS ----------------------------------
 */
 
+/**
+	\brief Helper function which appends a new environment variable for CGI child process
+
+	\param field The name of the environment variable
+	\param value The value of the environment variable
+*/
 void CgiHandler::setCgiEnv(const std::string &field, const std::string &value)
 {
 	std::string item = field + "=" + value;
@@ -90,6 +102,11 @@ void CgiHandler::setCgiEnv(const std::string &field, const std::string &value)
 	mEnvp.push_back(c);
 }
 
+/**
+	\brief Attempts to execute the requested CGI
+
+	\param route RouteResult enum which contains info on how to process the request
+*/
 bool CgiHandler::execute(RouteResult &route)
 {
 	if (pipe(this->mInFd) < 0)
@@ -116,11 +133,9 @@ bool CgiHandler::execute(RouteResult &route)
 		dup2(this->mInFd[0], STDIN_FILENO);
 		close(this->mInFd[0]);
 
-		// TODO: create env variables
-
 		struct stat statbuf;
 
-		if (stat(mClient->getRequestBody().c_str(), &statbuf) == 0)
+		if (stat(mClient->getRequestBodyFile().c_str(), &statbuf) == 0)
 		{
 			long size = statbuf.st_size;
 
@@ -189,7 +204,6 @@ bool CgiHandler::execute(RouteResult &route)
 		// ignore sigint while child process is running
 		std::signal(SIGINT, SIG_IGN);
 
-		// TODO: test this, make a script that sleep for 3s and then executes
 		waitpid(-1, NULL, WNOHANG);
 
 		// reset sigint after cgi process is over
@@ -204,6 +218,15 @@ bool CgiHandler::execute(RouteResult &route)
 	return (true);
 }
 
+/**
+	\brief Implemented virtual function, called by dispatcher when an event has fired
+
+	\param pollStruct Pollfd struct which contains information about the poll event
+
+	\details CgiHandler is registered twice on Dispatcher if the CGI request was a POST method. Two
+   pipes are created, one for writing to the CGI process, one for reading from it. So first we check
+   which pipe FD is ready with an event, then read/write as necessary
+*/
 void CgiHandler::handleEvents(struct pollfd &pollStruct)
 {
 	if (pollStruct.fd == mOutFd[0])
@@ -228,7 +251,7 @@ void CgiHandler::handleEvents(struct pollfd &pollStruct)
 
 	if (pollStruct.fd == mInFd[1] && (pollStruct.revents & POLLOUT))
 	{
-		const std::string &reqBodyFile = mClient->getRequestBody();
+		const std::string &reqBodyFile = mClient->getRequestBodyFile();
 		std::ifstream	   inf(reqBodyFile.c_str());
 		std::stringstream  buffer;
 		buffer << inf.rdbuf();
@@ -256,6 +279,13 @@ void CgiHandler::handleEvents(struct pollfd &pollStruct)
 	}
 }
 
+/**
+	\brief Generates a valid HTTP response after CGI parsing is finished
+
+	\details The web server parses the CGI output, ensuring its validity and calculating information
+	like Content-Length if it hasn't already been provided, and it adds any extra headers that may
+   be necessary such as Connection or Set-Cookies
+*/
 void CgiHandler::setCgiResponse()
 {
 	std::ostringstream finalResponse;
@@ -363,37 +393,43 @@ void CgiHandler::setCgiResponse()
 	mKeepAlive = false;
 
 	// cleanup
-	std::remove(mClient->getRequestBody().c_str());
+	std::remove(mClient->getRequestBodyFile().c_str());
 }
 
 /*
 ** --------------------------------- ACCESSOR ---------------------------------
 */
 
-// Compulsory function to implement abstract class
+/**
+	\brief Compulsory function to implement abstract class
+*/
 int CgiHandler::getFd() const
 {
 	return (this->mOutFd[0]);
 }
 
+/**
+	\brief Returns the read end of the pipe where the CGI writes its output
+*/
 int CgiHandler::getOutFd() const
 {
 	return (this->mOutFd[0]);
 }
 
+/**
+	\brief Returns the write end of the pipe used by the CGI process to read request body
+*/
 int CgiHandler::getInFd() const
 {
 	return (this->mInFd[1]);
 }
 
+/**
+	\brief Returns a bool telling Dispatcher whether to close the handler or not
+*/
 bool CgiHandler::getKeepAlive() const
 {
 	return (mKeepAlive);
-}
-
-void CgiHandler::terminateCgi()
-{
-	mKeepAlive = false;
 }
 
 /* ************************************************************************** */

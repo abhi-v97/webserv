@@ -14,6 +14,10 @@ Logger *Logger::mLogger = NULL;
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
+/**
+	\brief constructor for the Logger object, creates a log file on startup using current date and
+   time as its name
+*/
 Logger::Logger()
 {
 	std::time_t timeNow;
@@ -30,6 +34,9 @@ Logger::Logger()
 ** -------------------------------- DESTRUCTOR --------------------------------
 */
 
+/**
+	\brief Destructor, deletes the singleton instance if found.
+*/
 void Logger::deleteInstance()
 {
 	if (Logger::mLogger)
@@ -48,6 +55,9 @@ Logger::~Logger()
 ** --------------------------------- METHODS ----------------------------------
 */
 
+/**
+	\brief Getter for the Logger singleton instance
+*/
 Logger *Logger::getInstance()
 {
 	if (mLogger == NULL)
@@ -58,7 +68,7 @@ Logger *Logger::getInstance()
 }
 
 /**
-	Helper function which converts enum to string.
+	\brief Helper function which converts enum to string.
 */
 std::string levelToString(LogLevel level)
 {
@@ -81,7 +91,7 @@ std::string levelToString(LogLevel level)
 }
 
 /**
-	Helper function which gets the current timestamp
+	\brief Helper function which gets the current timestamp
 */
 std::string getTimestamp(void)
 {
@@ -96,7 +106,7 @@ std::string getTimestamp(void)
 }
 
 /**
-	\details
+	\brief
 	Ostringstream creates a std::string buffer where the log message is
 	first written. Then its forwarded to cout and logFile.
 */

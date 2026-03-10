@@ -1,5 +1,7 @@
 var searchData=
 [
-  ['generateresponse_0',['generateResponse',['../class_web_server.html#a634554b57db4d2477ff38598747c690e',1,'WebServer']]],
-  ['getinstance_1',['getInstance',['../class_logger.html#afec28ae6d7bdf8f6a0734cb20756de10',1,'Logger']]]
+  ['closecgi_0',['closeCgi',['../d2/d3f/class_dispatcher.html#ad54cfd39b2a81e8fdd1a1ba752b5c62b',1,'Dispatcher']]],
+  ['createcgihandler_1',['createCgiHandler',['../d2/d3f/class_dispatcher.html#a6ba2dc9f17a5f9e65297964350255115',1,'Dispatcher']]],
+  ['createclienthandler_2',['createClientHandler',['../d2/d3f/class_dispatcher.html#a556da59cfa7eab27e298b07e991bf5bf',1,'Dispatcher']]],
+  ['createlistener_3',['createListener',['../d2/d3f/class_dispatcher.html#acc875f9c6c8db1a17f4f1eaa8771b482',1,'Dispatcher']]]
 ];

@@ -5,7 +5,7 @@
 #include "Utils.hpp"
 
 /**
-	Helper function which adds the non-blocking flag to the listen socket.
+	\brief Helper function which adds the non-blocking flag to the listen socket.
 
 	\param socketFd
 */
@@ -26,6 +26,9 @@ bool setNonBlockingFlag(int socketFd)
 	return true;
 }
 
+/**
+	\brief Helper function that generates a random ID string of 12 characters from /dev/urandom
+*/
 std::string generateId()
 {
 	unsigned char temp[12];

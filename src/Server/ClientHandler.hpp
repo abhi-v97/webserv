@@ -4,9 +4,9 @@
 #include <sys/poll.h>
 #include <unistd.h>
 
-#include "Listener.hpp"
 #include "CgiHandler.hpp"
 #include "IHandler.hpp"
+#include "Listener.hpp"
 #include "RequestParser.hpp"
 #include "ResponseBuilder.hpp"
 #include "configParser.hpp"
@@ -24,7 +24,6 @@ class ClientHandler: public IHandler
 {
 public:
 	ClientHandler(int socketFd, ServerConfig *srv, Listener *listener, Dispatcher *dispatch);
-	~ClientHandler();
 
 	int				mSocketFd;
 	int				mRequestNum;
@@ -32,7 +31,7 @@ public:
 	bool			mIsCgi;
 	bool			mIsCgiDone;
 	ssize_t			mBytesSent;
-	time_t 			mCgiStart;
+	time_t			mCgiStart;
 	std::string		mRequest;
 	std::string		mClientIp;
 	ServerConfig   *mConfig;
@@ -47,9 +46,9 @@ public:
 	void		 handleEvents(struct pollfd &pollStruct);
 	std::string &getResponse();
 
-	bool getKeepAlive() const;
-	int	 getFd() const;
-	const std::string &getRequestBody() const;
+	bool			   getKeepAlive() const;
+	int				   getFd() const;
+	const std::string &getRequestBodyFile() const;
 
 private:
 	void readSocket();

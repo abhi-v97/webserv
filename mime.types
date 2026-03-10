@@ -8,4 +8,8 @@ jpeg:image/jpeg
 png:image/png
 mp4:video/mp4
 ico:image/vnd.microsoft.icon
-
+js:text/javascript
+json:application/json
+md:text/markdown
+css:text/css
+svg:image/svg+xml

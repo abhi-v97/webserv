@@ -39,6 +39,13 @@ Dispatcher::~Dispatcher()
 	mSessions.clear();
 }
 
+/**
+	\brief Main event loop for the web server
+
+	Checks poll until an event is fired. Poll is timed out and sent to sleep for 60 seconds to
+   prevent busy-wait. Every 60 sesconds, the loop checks if any inactive sessions and goes back to
+   sleep if no fd was ready.
+*/
 void Dispatcher::loop()
 {
 	std::signal(SIGINT, SIG_IGN);
@@ -99,6 +106,9 @@ void Dispatcher::loop()
 
 	If the bind was successful (might fail if port is already in use), adds the created object to
 	map mHandler
+	\param ip IP address of the server block
+	\param port port where new connections will be observed
+	\param srv ServerConfig object of the server block tied to the port
 */
 void Dispatcher::createListener(const std::string &ip, int port, ServerConfig srv)
 {
@@ -112,6 +122,11 @@ void Dispatcher::createListener(const std::string &ip, int port, ServerConfig sr
 
 /**
 	\brief factory method to add a new client to poll loop
+
+	\param socketFd Socket FD of the newly created connection
+	\param srv ServerConfig class object relating to the server block of the requested connection
+	\param listener Listener object where the new connection was requested, holds connection info
+   like IP address
 */
 void Dispatcher::createClientHandler(int socketFd, ServerConfig *srv, Listener *listener)
 {
@@ -124,6 +139,13 @@ void Dispatcher::createClientHandler(int socketFd, ServerConfig *srv, Listener *
 	mPollFds.push_back(pollFdStruct);
 }
 
+/**
+	\brief Factory method to create a CGI handler object and add it to the poll loop
+
+	\param client ClientHandler which requested the CGI object, needs to be configured to catch
+   timeouts
+   \param route RouteResult struct which contains information about the request
+*/
 void Dispatcher::createCgiHandler(ClientHandler *client, RouteResult &route)
 {
 	IHandler *cgi = new CgiHandler(client);
@@ -149,6 +171,9 @@ void Dispatcher::createCgiHandler(ClientHandler *client, RouteResult &route)
 	mPollFds.push_back(pollFdStruct);
 }
 
+/**
+	\brief Used to initalise Listeners for each valid port found in the config file
+*/
 bool Dispatcher::setListeners()
 {
 	mListenCount = mHandler.size();
@@ -173,6 +198,16 @@ bool Dispatcher::setListeners()
 	return (true);
 }
 
+/**
+	\brief Remove a handler from the poll loop
+
+	\param pollNum The index of the poll struct in the poll array
+
+	Uses the poll index rather than the struct directly to preserve the ordering and prevent invalid
+   indices or segfaults.
+   If the handler is CgiHandler, performs some additional checks if two FDs have been registered,
+   which can be the case for a CGI POST request
+*/
 void Dispatcher::removeHandler(int &pollNum)
 {
 	int clientFd = mPollFds[pollNum].fd;
@@ -204,7 +239,12 @@ void Dispatcher::removeHandler(int &pollNum)
 	close(clientFd);
 }
 
-Session *Dispatcher::addSession(std::string sessionId)
+/**
+	\brief Called by ClientHanlder when a new Session needs to be monitored
+
+	\param sessionId Randomly generated session ID string
+*/
+Session *Dispatcher::addSession(const std::string &sessionId)
 {
 	Session *newSession = new Session();
 	time_t	 now = time(NULL);
@@ -216,16 +256,32 @@ Session *Dispatcher::addSession(std::string sessionId)
 	return (newSession);
 }
 
+/**
+	\brief getter for a session object based on the session Id string
+
+	\param sessionId string representation of the session ID
+*/
 Session *Dispatcher::getSession(const std::string &sessionId)
 {
 	return (this->mSessions[sessionId]);
 }
 
+/**
+	\brief Called by ClientHandler when a CGI entity has timed out and needs to be forcefully shut
+   down
+
+   \param cgiFd The polled fd of the CgiHandler object
+*/
 void Dispatcher::closeCgi(int cgiFd)
 {
 	mHandler[cgiFd]->mKeepAlive = false;
 }
 
+/**
+	\brief Called by ClientHandler when an expired session has been detected
+
+	\param sessionId The id of the session to be deleted
+*/
 void Dispatcher::deleteSession(const std::string &sessionId)
 {
 	delete mSessions[sessionId];
@@ -243,6 +299,9 @@ void signalHandler(int sig)
 	gSignal = sig;
 }
 
+/**
+	\brief Returns an instance of RequestManager to ClientHandler to handle a fully parsed request
+*/
 RequestManager &Dispatcher::getRouter()
 {
 	return (mRequestManager);

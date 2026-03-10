@@ -1,5 +1,4 @@
 var searchData=
 [
-  ['cgihandler_0',['CgiHandler',['../class_cgi_handler.html',1,'']]],
-  ['clientstate_1',['ClientState',['../struct_client_state.html',1,'']]]
+  ['autoindex_0',['AutoIndex',['../df/dd8/class_auto_index.html',1,'']]]
 ];

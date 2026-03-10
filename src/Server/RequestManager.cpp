@@ -12,7 +12,12 @@ RequestManager::RequestManager(Dispatcher *dispatch): mDispatch(dispatch)
 {
 }
 
-// TODO: replace this with a config file setting, use shebang line to execute the file
+/**
+	\brief Helper function, sets CGI as output result if cgi is enabled for this location
+
+	\param srv ServerConfig object of the server block
+	\param out RouteResult struct sent back to ClientHandler
+*/
 void isCgi(ServerConfig *srv, RouteResult &out)
 {
 	LocationConfig &loc = srv->locations[out.locIndex];
@@ -21,7 +26,14 @@ void isCgi(ServerConfig *srv, RouteResult &out)
 		out.type = RR_CGI;
 }
 
-RouteResult RequestManager::route(RequestParser &parser, ServerConfig *srv, Session *session)
+/**
+	\brief Routes the request through a series of handlers and returns a copy of the struct to
+   ClientHandler so that it can send the correct response
+
+   \param parser RequestParser object which contains certain request info
+   \param srv ServerConfig object of the server block
+*/
+RouteResult RequestManager::route(RequestParser &parser, ServerConfig *srv)
 {
 	RouteResult	 result;
 	std::string &uri = parser.getUri();
@@ -35,10 +47,17 @@ RouteResult RequestManager::route(RequestParser &parser, ServerConfig *srv, Sess
 	return (result);
 }
 
-bool RequestManager::serveAutoIndex(std::string	  &uri,
-									RequestParser &parser,
-									ServerConfig  *srv,
-									RouteResult	  &out)
+/**
+	\brief Handles indexing resopnse
+
+	\param parser RequestParser object which contains certain request info
+	\param srv ServerConfig object of the server block
+	\param out reference to the RouteResult struct to be sent back to client
+
+	Tries to first check for a given index file in the location block. If not found checks if
+   auto-indexing is valid for this location and returns the appropriate response
+*/
+bool RequestManager::handleIndex(RequestParser &parser, ServerConfig *srv, RouteResult &out)
 {
 	std::vector<LocationConfig> &locs = srv->locations;
 
@@ -64,6 +83,17 @@ bool RequestManager::serveAutoIndex(std::string	  &uri,
 	}
 }
 
+/**
+	\brief Determines the canonical path of the request URI
+
+	\param parser RequestParser object which contains certain request info
+	\param srv ServerConfig object of the server block
+	\param out reference to the RouteResult struct to be sent back to client
+
+	\details Handles rerouting if the given URI requested a folder, or vice versa, which is done by
+   checking if the URI ends in a slash. Handles the scenarios like a folder that doesn't end in a
+   slash, a file URI that ends in a slash etc.
+*/
 bool RequestManager::handleCanonicalPath(RequestParser &parser, ServerConfig *srv, RouteResult &out)
 {
 	std::vector<LocationConfig> &locs = srv->locations;
@@ -93,7 +123,7 @@ bool RequestManager::handleCanonicalPath(RequestParser &parser, ServerConfig *sr
 				return (true);
 			}
 			else
-				return (serveAutoIndex(filePath, parser, srv, out));
+				return (handleIndex(parser, srv, out));
 		}
 		else
 		{
@@ -133,12 +163,26 @@ bool RequestManager::handleCanonicalPath(RequestParser &parser, ServerConfig *sr
 		}
 	}
 	if (parser.getMethod() == POST || parser.getMethod() == DELETE)
+	{
+		if (hasSlash == true)
+			filePath.erase(filePath.size() - 1, 1);
 		return (validateRequest(parser, srv, out));
+	}
 	setError(404, "File not found", out);
 	return (true);
 }
 
-// TODO: update this to search deeper than one folder level
+/**
+	\brief Finds the location block which best matches the given URI
+
+	\param uri Reference to request URI
+	\param parser RequestParser object which contains certain request info
+	\param srv ServerConfig object of the server block
+	\param out reference to the RouteResult struct to be sent back to client
+
+	\details The function looks through all available locations for a perfect match, and if not
+   found, settles on the best match which is simply the longest matching string.
+*/
 bool RequestManager::validateUri(std::string   &uri,
 								 RequestParser &parser,
 								 ServerConfig  *srv,
@@ -184,6 +228,13 @@ bool RequestManager::validateUri(std::string   &uri,
 	return (handleCanonicalPath(parser, srv, out));
 }
 
+/**
+	\brief Verifies request method and file permissions
+
+	\param parser RequestParser object which contains certain request info
+	\param srv ServerConfig object of the server block
+	\param out reference to the RouteResult struct to be sent back to client
+*/
 bool RequestManager::validateRequest(RequestParser &parser, ServerConfig *srv, RouteResult &out)
 {
 	const std::string &uri = out.filePath;
@@ -211,12 +262,18 @@ bool RequestManager::validateRequest(RequestParser &parser, ServerConfig *srv, R
 		out.type = RR_GET;
 		return (true);
 	}
-	if ((method == POST && writePost(uri, parser, out)) ||
-		(method == DELETE && deleteMethod(uri, out)))
+	if ((method == POST && writePost(parser, out)) || (method == DELETE && deleteMethod(out)))
 		return (true);
 	return (false);
 }
 
+/**
+	\brief Verifies the request method for the given location block
+
+	\param parser RequestParser object which contains certain request info
+	\param srv ServerConfig object of the server block
+	\param out reference to the RouteResult struct to be sent back to client
+*/
 bool RequestManager::checkMethod(RequestParser &parser, ServerConfig *srv, RouteResult &out)
 {
 	std::string	   methodStr;
@@ -266,34 +323,39 @@ bool RequestManager::checkPermissions(RequestMethod method, RouteResult &out)
 	}
 	else if (method == GET && access(uri.c_str(), R_OK))
 	{
-		// TODO: test, see what nginx does whena requested file has no read permission
-		setError(403, "Failed to read resource", out);
+		setError(403, "Failed to read resource: Missing permissions", out);
 		return (false);
 	}
 	else if (method == DELETE && access(uri.c_str(), W_OK))
 	{
-		setError(403, "Failed to delete resource", out);
+		setError(403, "Failed to delete resource: Missing permissions", out);
 		return (false);
 	}
 	else if (out.type == RR_CGI && access(uri.c_str(), X_OK))
 	{
-		setError(403, "Failed to execute resource", out);
+		setError(403, "Failed to execute resource: Missing permissions", out);
 		return (false);
 	}
 	return (true);
 }
 
-bool RequestManager::writePost(const std::string &uri, RequestParser &parser, RouteResult &out)
+/**
+	\brief attempts to perform the write operation for a POST request
+
+	\param srv ServerConfig object of the server block
+	\param out reference to the RouteResult struct to be sent back to client
+*/
+bool RequestManager::writePost(RequestParser &parser, RouteResult &out)
 {
 	const std::string &bodyFile = parser.getBodyFile();
 	bool			   newFile = false;
 
 	if (bodyFile.empty())
 		return (true);
-	if (access(uri.c_str(), F_OK) == -1)
+	if (access(out.filePath.c_str(), F_OK) == -1)
 		newFile = true;
 	std::ifstream inf(bodyFile.c_str());
-	std::ofstream outf(uri.c_str(), std::ios::app);
+	std::ofstream outf(out.filePath.c_str(), std::ios::app);
 	if (!inf || !outf)
 	{
 		setError(500, "Internal Server Error: failed to write POST message", out);
@@ -303,7 +365,8 @@ bool RequestManager::writePost(const std::string &uri, RequestParser &parser, Ro
 	outf.close();
 	std::remove(bodyFile.c_str());
 	out.type = RR_BASIC;
-	out.bodyMsg = "The requested file \"" + uri.substr(uri.find_last_of('/') + 1) + "\" has been ";
+	out.bodyMsg = "The requested file \"" +
+				  out.filePath.substr(out.filePath.find_last_of('/') + 1) + "\" has been ";
 	if (newFile)
 		out.bodyMsg += "created.";
 	else
@@ -311,9 +374,15 @@ bool RequestManager::writePost(const std::string &uri, RequestParser &parser, Ro
 	return (true);
 }
 
-bool RequestManager::deleteMethod(const std::string &uri, RouteResult &out)
+/**
+	\brief attempts to perform the delete operation for a DELETE request
+
+	\param srv ServerConfig object of the server block
+	\param out reference to the RouteResult struct to be sent back to client
+*/
+bool RequestManager::deleteMethod(RouteResult &out)
 {
-	if (remove(uri.c_str()))
+	if (remove(out.filePath.c_str()))
 	{
 		setError(500, "Internal Server Error: failed to write POST message", out);
 		return (false);
@@ -321,6 +390,17 @@ bool RequestManager::deleteMethod(const std::string &uri, RouteResult &out)
 	return (true);
 }
 
+/**
+	\brief Searches for and handles the range header field
+
+	\param parser RequestParser object which contains certain request info
+	\param out reference to the RouteResult struct to be sent back to client
+
+	\details If a HTTP request contains the range header field, its a partial request which needs
+	specific bytes of a file, eg a video file.
+	Example: Range: bytes=0-1023
+	If range-end isn't provided, assume it to be the end of file
+*/
 void RequestManager::parseRangeHeader(RequestParser &parser, RouteResult &out)
 {
 	std::string rangeStr = parser.getHeaders()["range"];
@@ -335,13 +415,23 @@ void RequestManager::parseRangeHeader(RequestParser &parser, RouteResult &out)
 		size_t dash = rangeStr.find_first_of('-');
 
 		out.partialOffset = std::atoi(rangeStr.c_str() + equal + 1);
-		out.partialLength = std::atoi(rangeStr.c_str() + dash + 1) - out.partialOffset;
+		ssize_t rangeEnd = -1;
+		rangeEnd = std::atoi(rangeStr.c_str() + dash + 1);
+		if (rangeEnd != -1)
+			out.partialLength = std::atoi(rangeStr.c_str() + dash + 1) - out.partialOffset;
 		LOG_DEBUG("fileOffset: " + numToString(out.fileOffset) +
 				  "; fileLength: " + numToString(out.fileLength));
 	}
 }
 
-void RequestManager::setError(int status, const std::string &bodyMsg, RouteResult &out)
+/**
+	\brief Helper function, used to set error info in RouteResult struct
+	
+	\param status HTTP status code
+	\param bodyMsg Error message, to be sent as response body
+	\param out reference to the RouteResult struct to be sent back to client
+*/
+void setError(int status, const std::string &bodyMsg, RouteResult &out)
 {
 	out.status = status;
 	out.bodyMsg = bodyMsg;

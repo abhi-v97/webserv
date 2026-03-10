@@ -39,7 +39,6 @@ class RequestParser
 {
 public:
 	RequestParser();
-	~RequestParser();
 
 	std::map<std::string, std::string> &getHeaders();
 	std::string						   &getRequestHeader();
@@ -50,7 +49,6 @@ public:
 	bool								getKeepAliveRequest();
 	const std::string				   &getBodyFile() const;
 	int									getRequestCount();
-	void								setHeaderEnd(const size_t &headerEnd);
 	bool								parse(std::string &requestBuffer);
 	bool								parseBody(std::string &request);
 	std::string						   &getCookies();

@@ -5,8 +5,6 @@
 #include <sstream>
 #include <string>
 
-// TODO: put macros in a separate file?
-
 /** \example
 	This is an example of how to use the Logger class
 

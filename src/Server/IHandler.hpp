@@ -2,6 +2,11 @@
 
 #include <poll.h>
 
+/**
+	\class IHandler
+
+	Abstract class to implement a handler that can be polled and managed by Dispatcher.
+*/
 class IHandler
 {
 public:
