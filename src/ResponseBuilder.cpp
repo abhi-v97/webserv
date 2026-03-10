@@ -122,7 +122,7 @@ void ResponseBuilder::buildPartialResponse(RouteResult &route)
 
 	std::string partialBody = body.str().substr(route.partialOffset, route.partialLength + 1);
 
-	LOG_DEBUG("response body size: " + numToString(newbody.size()));
+	LOG_DEBUG("response body size: " + numToString(partialBody.size()));
 	mResponseStream << "Content-Range: bytes " << route.partialOffset << "-"
 					<< route.partialLength + route.partialOffset << "/" << body.str().size();
 	mResponseStream << "\r\nContent-Length: " << route.partialLength + 1;
@@ -141,9 +141,13 @@ void ResponseBuilder::buildErrorResponse(RouteResult &route)
 	mStatus = route.status;
 	mResponseStream << "HTTP/1.1 " << numToString(mStatus)
 					<< "\r\nContent-Type: text/html\r\nContent-Length: "
-					<< numToString(80 + route.bodyMsg.size())
-					<< "\r\n\r\n<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
-					<< numToString(mStatus) << "</h2><p> " << route.bodyMsg << "</p></html>";
+					<< numToString(81 + route.bodyMsg.size()) << "\r\n\r\n";
+
+	if (mParser->getMethod() != HEAD)
+	{
+		mResponseStream << "<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
+						<< numToString(mStatus) << "</h2><p> " << route.bodyMsg << "</p></html>";
+	}
 	mResponse = mResponseStream.str();
 	LOG_ERROR("ResponseBuilder: Error status: " + numToString(mStatus) + ": " + route.bodyMsg);
 	LOG_DEBUG(mResponse);
@@ -160,8 +164,15 @@ void ResponseBuilder::buildAutoIndex(RouteResult &route)
 	addCookies();
 	mResponseStream << "Content-Type: text/html\r\nAccept-Ranges: bytes\r\n";
 	addConnectionField(route.keepAlive);
-	mResponseStream << "Content-Length: " << autoIndexBody.size();
-	mResponseStream << "\r\n\r\n" << autoIndexBody;
+	if (route.type == RR_GET)
+	{
+		mResponseStream << "Content-Length: " << autoIndexBody.size();
+		mResponseStream << "\r\n\r\n" << autoIndexBody;
+	}
+	else
+	{
+		mResponseStream << "Content-Length: 0\r\n\r\n";
+	}
 	mResponse = mResponseStream.str();
 	mResponseReady = true;
 }

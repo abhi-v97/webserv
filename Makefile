@@ -31,9 +31,7 @@ v valgrind: ${NAME}
 	valgrind --leak-check=full --show-leak-kinds=all --track-fds=yes -s ./${NAME}
 
 debug: CFLAGS += -D LOG_LEVEL=0
-debug: clean ${OBJS}
-	rm -f ${OBJS}
-	${NAME} -D LOG_LEVEL=0
+debug: all
 
 clean:
 	rm -f ${OBJS}

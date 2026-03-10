@@ -14,6 +14,7 @@
 #include "Logger.hpp"
 #include "RequestManager.hpp"
 #include "Utils.hpp"
+#include "configParser.hpp"
 
 #define BUFFER_SIZE 4096
 
@@ -147,8 +148,10 @@ bool CgiHandler::execute(RouteResult &route)
 		{
 		case RR_GET:
 			setCgiEnv("REQUEST_METHOD", "GET");
+			break;
 		case RR_CGI_POST:
 			setCgiEnv("REQUEST_METHOD", "POST");
+			break;
 		case RR_HEAD:
 			setCgiEnv("REQUEST_METHOD", "HEAD");
 		default:;
@@ -183,12 +186,30 @@ bool CgiHandler::execute(RouteResult &route)
 		setCgiEnv("SERVER_PORT", numToString(mClient->mListener->getPort()));
 		setCgiEnv("GATEWAY_INTERFACE", "CGI/1.1");
 		setCgiEnv("SERVER_PROTOCOL", "HTTP/1.1");
+		setCgiEnv("PATH_INFO", "/directory/youpi.bla");
+		setCgiEnv("REQUEST_URI", "/directory/youpi.bla");
+		setCgiEnv("SCRIPT_NAME", "/directory/youpi.bla");
 
 		mEnvp.push_back(NULL);
 		char *const *envp = &mEnvp[0];
 
 		char *argv[3];
-		argv[0] = (char *) route.filePath.c_str();
+		
+		LocationConfig &loc = mClient->mConfig->locations[route.locIndex];
+		size_t extStart = route.filePath.find_last_of('.');
+		std::string ext("");
+		if (extStart != std::string::npos)
+			ext = route.filePath.substr(extStart);
+		if (!loc.cgis.empty())
+		{
+			for (std::vector<CgiConfig>::iterator it = loc.cgis.begin(); it != loc.cgis.end(); it++)
+			{
+				if (it->extension == ext && !it->pass.empty())
+					argv[0] = (char *) it->pass.c_str();
+			}
+		}
+		else
+			argv[0] = (char *) route.filePath.c_str();
 		argv[1] = (char *) route.filePath.c_str();
 		argv[2] = NULL;
 		LOG_INFO("starting execve");

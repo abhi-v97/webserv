@@ -43,7 +43,8 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 		this->readSocket();
 		if (this->parseRequest() == true)
 		{
-			LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig->serverName +
+			if (mParser.getRequestHeader().size() < 200)
+				LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig->serverName +
 								   ", request: \"" + mParser.getRequestHeader() + "\""));
 			pollStruct.events |= POLLOUT;
 		}
@@ -54,7 +55,6 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 		{
 			if (sendResponse() == true)
 			{
-				mKeepAlive = mParser.getKeepAliveRequest();
 				mRequestNum++;
 				mBytesSent = 0;
 				mIsCgi = false;
@@ -149,7 +149,10 @@ bool ClientHandler::generateResponse()
 	route.keepAlive = mParser.getKeepAliveRequest();
 	setSession(route);
 	if (route.type == RR_ERROR)
+	{
+		route.keepAlive = false;
 		mResponseObj.buildErrorResponse(route);
+	}
 	else if (route.type == RR_BASIC)
 		mResponseObj.buildSimpleResponse(route.status, route.bodyMsg);
 	else if (route.type == RR_GET)
@@ -171,6 +174,7 @@ bool ClientHandler::generateResponse()
 	{
 		LOG_ERROR("RequestManager failed to find a valid route for this request");
 	}
+	mKeepAlive = route.keepAlive;
 	return (true);
 }
 

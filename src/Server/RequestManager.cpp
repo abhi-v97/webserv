@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <iostream>
+#include <string>
 #include <sys/stat.h>
 
 #include "Dispatcher.hpp"
@@ -18,12 +19,35 @@ RequestManager::RequestManager(Dispatcher *dispatch): mDispatch(dispatch)
 	\param srv ServerConfig object of the server block
 	\param out RouteResult struct sent back to ClientHandler
 */
-void isCgi(ServerConfig *srv, RouteResult &out)
+void isCgi(const std::string &uri, RequestParser &parser, ServerConfig *srv, RouteResult &out)
 {
 	LocationConfig &loc = srv->locations[out.locIndex];
+	size_t extStart = uri.find_last_of('.');
+	RequestMethod  method = parser.getMethod();
+	std::string methodStr;
 
-	if (loc.cgiEnabled == true)
-		out.type = RR_CGI;
+	if (method == POST)
+		methodStr = "POST";
+	else if (method == DELETE)
+		methodStr = "DELETE";
+	else if (method == GET)
+		methodStr = "GET";
+	else if (method == HEAD)
+		methodStr = "HEAD";
+	if (extStart == std::string::npos)
+		return;
+	std::string ext = uri.substr(extStart);
+	for (std::vector<CgiConfig>::const_iterator it = loc.cgis.begin(); it != loc.cgis.end(); it++)
+	{
+		if (ext == it->extension)
+		{
+			for (std::vector<std::string>::const_iterator itt = it->methods.begin(); itt != it->methods.end(); itt++)
+			{
+				if (*itt == methodStr)
+					out.type = RR_CGI;
+			}
+		}
+	}
 }
 
 /**
@@ -61,6 +85,12 @@ bool RequestManager::handleIndex(RequestParser &parser, ServerConfig *srv, Route
 {
 	std::vector<LocationConfig> &locs = srv->locations;
 
+	isCgi(out.filePath, parser, srv, out);
+	if (!checkMethod(parser, srv, out))
+	{
+		setError(405, "Method not allowed for this location", out);
+		return (false);
+	}
 	if (!locs[out.locIndex].index.empty())
 	{
 		std::string indexFile = out.filePath + locs[out.locIndex].index;
@@ -73,7 +103,7 @@ bool RequestManager::handleIndex(RequestParser &parser, ServerConfig *srv, Route
 	}
 	if (locs[out.locIndex].autoindex == false)
 	{
-		setError(403, "Auto indexing not allowed for this location", out);
+		setError(404, "Index file not found", out);
 		return (false);
 	}
 	else
@@ -106,6 +136,12 @@ bool RequestManager::handleCanonicalPath(RequestParser &parser, ServerConfig *sr
 	if (*it == '/')
 		hasSlash = true;
 
+	if (parser.getMethod() == POST || parser.getMethod() == DELETE)
+	{
+		if (hasSlash == true)
+			filePath.erase(filePath.size() - 1, 1);
+		return (validateRequest(parser, srv, out));
+	}
 	struct stat st;
 	if (stat(filePath.c_str(), &st) == 0)
 	{
@@ -161,12 +197,6 @@ bool RequestManager::handleCanonicalPath(RequestParser &parser, ServerConfig *sr
 				return (true);
 			}
 		}
-	}
-	if (parser.getMethod() == POST || parser.getMethod() == DELETE)
-	{
-		if (hasSlash == true)
-			filePath.erase(filePath.size() - 1, 1);
-		return (validateRequest(parser, srv, out));
 	}
 	setError(404, "File not found", out);
 	return (true);
@@ -224,7 +254,13 @@ bool RequestManager::validateUri(std::string   &uri,
 	if (!out.filePath.empty() && uri.at(0) != '/' &&
 		out.filePath.at(out.filePath.size() - 1) != '/')
 		out.filePath += '/';
-	out.filePath += uri;
+	if (!locs[winner].alias.empty())
+	{
+		out.filePath = locs[winner].alias;
+		out.filePath += uri.substr(locs[winner].path.size());
+	}
+	else
+		out.filePath += uri;
 	return (handleCanonicalPath(parser, srv, out));
 }
 
@@ -240,10 +276,10 @@ bool RequestManager::validateRequest(RequestParser &parser, ServerConfig *srv, R
 	const std::string &uri = out.filePath;
 	RequestMethod	   method = parser.getMethod();
 
-	isCgi(srv, out);
+	isCgi(out.filePath, parser, srv, out);
 	if (!checkMethod(parser, srv, out))
 	{
-		setError(403, "Method not allowed for this location", out);
+		setError(405, "Method not allowed for this location", out);
 		return (false);
 	}
 	if (!checkPermissions(parser.getMethod(), out))
@@ -286,11 +322,23 @@ bool RequestManager::checkMethod(RequestParser &parser, ServerConfig *srv, Route
 		methodStr = "DELETE";
 	else if (method == GET)
 		methodStr = "GET";
+	else if (method == HEAD)
+		methodStr = "HEAD";
 	for (int i = 0; i < loc.methods.size(); i++)
 	{
 		if (loc.methods[i] == methodStr)
 			break;
 	}
+	// if (method == POST)
+	// {
+	// 	int size = atoi(parser.getHeaders()["content-length"].c_str());
+		
+	// 	if (size == 0)
+	// 	{
+	// 		setError(405, "Bad Request", out);
+	// 		return (true);
+	// 	}
+	// }
 	if (find(loc.methods.begin(), loc.methods.end(), methodStr) == loc.methods.end())
 		return (false);
 	return (true);
@@ -331,11 +379,11 @@ bool RequestManager::checkPermissions(RequestMethod method, RouteResult &out)
 		setError(403, "Failed to delete resource: Missing permissions", out);
 		return (false);
 	}
-	else if (out.type == RR_CGI && access(uri.c_str(), X_OK))
-	{
-		setError(403, "Failed to execute resource: Missing permissions", out);
-		return (false);
-	}
+	// else if (out.type == RR_CGI && access(uri.c_str(), X_OK))
+	// {
+	// 	setError(403, "Failed to execute resource: Missing permissions", out);
+	// 	return (false);
+	// }
 	return (true);
 }
 
@@ -419,8 +467,8 @@ void RequestManager::parseRangeHeader(RequestParser &parser, RouteResult &out)
 		rangeEnd = std::atoi(rangeStr.c_str() + dash + 1);
 		if (rangeEnd != -1)
 			out.partialLength = std::atoi(rangeStr.c_str() + dash + 1) - out.partialOffset;
-		LOG_DEBUG("fileOffset: " + numToString(out.fileOffset) +
-				  "; fileLength: " + numToString(out.fileLength));
+		LOG_DEBUG("fileOffset: " + numToString(out.partialOffset) +
+				  "; fileLength: " + numToString(out.partialLength));
 	}
 }
 

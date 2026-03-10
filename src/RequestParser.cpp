@@ -178,16 +178,16 @@ unsigned int hexToInt(std::string &hex)
 	for (std::string::iterator it = hex.begin(); it != hex.end(); it++)
 	{
 		if (*it >= '0' && *it <= '9')
-			value += *it - '0';
+			value = *it - '0';
 		else if (*it >= 'A' && *it <= 'F')
-			value += *it - 'A' + 10;
+			value = *it - 'A' + 10;
 		else if (*it >= 'a' && *it <= 'f')
-			value += *it - 'a' + 10;
+			value = *it - 'a' + 10;
 		else
 			break; // stop at invalid character
 
-		// result = result * 16 + value;
-		result = (result << 4) | value;
+		result = result * 16 + value;
+		// result = (result << 4) | value;
 	}
 	return (result);
 }
@@ -237,7 +237,7 @@ bool RequestParser::parseChunked(std::string &request)
 			if (request.find("\r\n", mParsePos) == std::string::npos)
 			{
 				// TODO: I think you're supposed to set a 400 bad request here
-				return (false);
+				return (true);
 			}
 			mParsePos += 2;
 		}

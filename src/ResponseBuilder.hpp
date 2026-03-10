@@ -34,7 +34,7 @@ public:
 	void		buildErrorResponse(RouteResult &route);
 	void		buildSimpleResponse(int status, const std::string &msg);
 	void		buildAutoIndex(RouteResult &route);
-	void 		buildRedirect(RouteResult &route);
+	void		buildRedirect(RouteResult &route);
 	void		setError(int code, const std::string &error);
 	void		setSessionId(const std::string &id);
 	std::string getResponse();
