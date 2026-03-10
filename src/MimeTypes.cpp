@@ -3,17 +3,21 @@
 #include "MimeTypes.hpp"
 #include "fstream"
 
-// static member init
+/**
+	\brief static member init
+*/
 MimeTypes *MimeTypes::mInstance = NULL;
 
-// in case file parsing fails, treat all files as plain-text
+/**
+	\brief in case file parsing fails, treat all files as plain-text
+*/
 MimeTypes::MimeTypes()
 {
 	mSupportedTypes["txt"] = "text/plain";
 }
 
 /**
- * Returns a singleton instance of MimeTypes, creates one at startup
+ * \brief Returns a singleton instance of MimeTypes, creates one at startup
  */
 MimeTypes *MimeTypes::getInstance()
 {
@@ -25,7 +29,7 @@ MimeTypes *MimeTypes::getInstance()
 }
 
 /**
- * Use to free the singleton instance when shutting down the server
+ * \brief Use to free the singleton instance when shutting down the server
  */
 void MimeTypes::deleteInstance()
 {
@@ -37,8 +41,8 @@ void MimeTypes::deleteInstance()
 }
 
 /**
- * init function, call during server startup to create a map of file extensions and their respective
- * MIME types
+ * \brief init function, call during server startup to create a map of file extensions and their
+ * respective MIME types
  */
 void MimeTypes::loadFromFile(const std::string &filename)
 {
@@ -61,7 +65,7 @@ void MimeTypes::loadFromFile(const std::string &filename)
 }
 
 /**
- * Returns the MIME-type for a given file
+ * \brief Returns the MIME-type for a given file
  * Use while building the response, or to determine how to handle a specific file
  */
 std::string &MimeTypes::getType(const std::string &filename)
@@ -79,9 +83,7 @@ std::string &MimeTypes::getType(const std::string &filename)
 }
 
 /**
- * Returns true if the file extension is supported.
- *
- * Might be useful.
+ * \brief Returns true if the file extension is supported.
  */
 bool MimeTypes::isSupported(std::string &filename)
 {
@@ -93,4 +95,3 @@ bool MimeTypes::isSupported(std::string &filename)
 	else
 		return (false);
 }
-

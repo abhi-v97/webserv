@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['parserequest_0',['parseRequest',['../class_web_server.html#a1c35a478ade50bf57ce0e811a7f025b7',1,'WebServer']]]
+  ['ihandler_0',['IHandler',['../d1/dfe/class_i_handler.html',1,'']]],
+  ['issupported_1',['isSupported',['../d5/d07/class_mime_types.html#a65c525b438b3e58464732833f257ac76',1,'MimeTypes']]]
 ];

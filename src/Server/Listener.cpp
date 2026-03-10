@@ -8,6 +8,14 @@
 #include "Utils.hpp"
 #include "configParser.hpp"
 
+/**
+	\brief Constructor for a new listener object
+	
+	\param ip IP address of the server
+	\param port Port address where the listen will occur
+	\param srv ServerConfig object of the server block
+	\param dispatch Pointer to the main dispatch loop
+*/
 Listener::Listener(const std::string &ip, int port, ServerConfig srv, Dispatcher *dispatch)
 {
 	mDispatch = dispatch;
@@ -22,12 +30,18 @@ Listener::Listener(const std::string &ip, int port, ServerConfig srv, Dispatcher
 	mConfig = srv;
 }
 
+/**
+	\brief Destructor for the Listener object, closes the socket FD tied to it
+*/
 Listener::~Listener()
 {
 	LOG_INFO("Closing Listener at port: " + numToString(ntohs(mSocketAddress.sin_port)));
 	close(mSocketFd);
 }
 
+/**
+	\brief handles a new event on the poll loop
+*/
 void Listener::handleEvents(pollfd &pollStruct)
 {
 	if (pollStruct.revents & POLLIN)
@@ -76,6 +90,12 @@ bool Listener::bindPort()
 	return (true);
 }
 
+/**
+	\brief Triggered when a new connection is requested on this Listener's port
+
+	Tries to accept a new connection, and on success registers it on the poll loop through
+   Dispatcher
+*/
 bool Listener::newConnection()
 {
 	struct sockaddr_in clientAddr = {};
@@ -100,21 +120,35 @@ bool Listener::newConnection()
 	return (setNonBlockingFlag(newFd));
 }
 
+/**
+	\brief Implemented function of IHandler, returns the FD of the Listener handler
+*/
 int Listener::getFd() const
 {
 	return (this->mSocketFd);
 }
 
+/**
+	\brief Used by Dispatcher to decide if handler needs to be closed or not
+
+	Usually true for Listener objects, will be switched to false if an error occurred or bind failed
+*/
 bool Listener::getKeepAlive() const
 {
 	return (this->mKeepAlive);
 }
 
+/**
+	\brief Getter for IP address
+*/
 const std::string &Listener::getIp() const
 {
 	return (this->mClientIp);
 }
 
+/**
+	\brief Getter for port address
+*/
 int Listener::getPort() const
 {
 	return (ntohs(this->mSocketAddress.sin_port));

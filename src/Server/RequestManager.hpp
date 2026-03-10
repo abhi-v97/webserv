@@ -31,6 +31,12 @@ enum RequestRoute
 	RR_ERROR,
 };
 
+/**
+	\struct RouteResult
+
+	Struct returned to ClientHandler which contains information about the request and how to handle
+   it
+*/
 struct RouteResult
 {
 	enum RequestRoute type;
@@ -55,7 +61,7 @@ class RequestManager
 public:
 	RequestManager(Dispatcher *dispatch);
 
-	RouteResult route(RequestParser &parser, ServerConfig *srv, Session *session);
+	RouteResult route(RequestParser &parser, ServerConfig *srv);
 	void		setBodyFile(const std::string &bodyFile);
 
 private:
@@ -63,17 +69,16 @@ private:
 
 	bool generateResponse();
 	bool sendResponse();
-	bool writePost(const std::string &uri, RequestParser &parser, RouteResult &out);
-	bool deleteMethod(const std::string &uri, RouteResult &out);
+	bool writePost(RequestParser &parser, RouteResult &out);
+	bool deleteMethod(RouteResult &out);
 	bool checkPermissions(RequestMethod method, RouteResult &out);
 	bool validateUri(std::string &uri, RequestParser &parser, ServerConfig *srv, RouteResult &out);
 	bool handleCanonicalPath(RequestParser &parser, ServerConfig *srv, RouteResult &out);
 	bool validateRequest(RequestParser &parser, ServerConfig *srv, RouteResult &out);
 	bool checkMethod(RequestParser &parser, ServerConfig *srv, RouteResult &out);
-	void setError(int status, const std::string &bodyMsg, RouteResult &out);
 	void parseRangeHeader(RequestParser &parser, RouteResult &out);
-	bool serveAutoIndex(std::string	  &uri,
-						RequestParser &parser,
-						ServerConfig  *srv,
-						RouteResult	  &out);
+	bool handleIndex(RequestParser &parser, ServerConfig *srv, RouteResult &out);
 };
+
+
+void setError(int status, const std::string &bodyMsg, RouteResult &out);

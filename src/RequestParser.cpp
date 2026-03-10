@@ -10,6 +10,9 @@
 #include "RequestParser.hpp"
 #include "Utils.hpp"
 
+/**
+	\brief Constructor
+*/
 RequestParser::RequestParser()
 	: mMethod(UNKNOWN), bodyToFile(false), mParsingFinished(false), mChunkedRequest(false),
 	  bodyFd(-1), bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mParsePos(0), mChunkSize(0),
@@ -17,10 +20,11 @@ RequestParser::RequestParser()
 {
 }
 
-RequestParser::~RequestParser()
-{
-}
+/**
+	\brief Parses a HTTP request using a state machine pattern
 
+	\param requestBuffer HTTP request string
+*/
 bool RequestParser::parse(std::string &requestBuffer)
 {
 	std::string buffer;
@@ -91,6 +95,11 @@ bool RequestParser::parse(std::string &requestBuffer)
 	return (true);
 }
 
+/**
+	\brief Parses HTTP header request line
+
+	\param header Header line substring from request
+*/
 bool RequestParser::parseHeader(const std::string &header)
 {
 	LOG_DEBUG("parsing request-line");
@@ -120,6 +129,11 @@ bool RequestParser::parseHeader(const std::string &header)
 	return (true);
 }
 
+/**
+	\brief Parses request header fields line by line
+
+	\param buffer Single header field line
+*/
 bool RequestParser::parseHeaderField(std::string &buffer)
 {
 	size_t colonPos = buffer.find(':');
@@ -150,6 +164,11 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 	return (true);
 }
 
+/**
+	\brief Helper function used to convert hex string to uint for chunked encoding
+
+	\param hex Hex number in std::string format
+*/
 unsigned int hexToInt(std::string &hex)
 {
 	unsigned int result = 0;
@@ -173,6 +192,11 @@ unsigned int hexToInt(std::string &hex)
 	return (result);
 }
 
+/**
+	\brief Parses chunked body
+
+	\param request Request body string
+*/
 bool RequestParser::parseChunked(std::string &request)
 {
 	if (mChunkSize == 0)
@@ -221,6 +245,11 @@ bool RequestParser::parseChunked(std::string &request)
 	return (true);
 }
 
+/**
+	\brief Parses through HTTP body
+
+	\param request HTTP request string
+*/
 bool RequestParser::parseBody(std::string &request)
 {
 	LOG_DEBUG("parsing body");
@@ -279,6 +308,12 @@ bool RequestParser::parseBody(std::string &request)
 	return true;
 }
 
+/**
+	\brief Helper function to set a parsing error
+
+	\param statusCode HTTP status code of error
+	\param errorMsg Error message, sent as response body
+*/
 void RequestParser::handleError(int statusCode, const std::string &errorMsg)
 {
 	LOG_ERROR("RequestParser: " + errorMsg);
@@ -305,8 +340,11 @@ bool RequestParser::validateUri(const std::string &uri)
 	return (false);
 }
 
-// Returns false if HTTP version is 1.0 as it did not support persistent connections
-// Also returns false if client requested connection to be closed
+//
+/**
+	\brief Returns false if HTTP version is 1.0 as it did not support persistent connections. Also
+   returns false if client requested connection to be closed
+*/
 bool RequestParser::getKeepAliveRequest()
 {
 	if (*(mHttpVersion.rbegin()) == '0')
@@ -319,8 +357,10 @@ bool RequestParser::getKeepAliveRequest()
 	return (true);
 }
 
-// Returns false if HTTP version is 1.0 as it did not support chunked encoding
-// Also returns false if header field is not specified/has typos
+/**
+	\brief Returns false if HTTP version is 1.0 as it did not support chunked encoding. Also returns
+   false if header field is not specified/has typos
+*/
 bool RequestParser::getEncoding()
 {
 	if (*(mHttpVersion.rbegin()) == '0')
@@ -333,11 +373,17 @@ bool RequestParser::getEncoding()
 	return (false);
 }
 
+/**
+	\brief Getter for temporary request body file
+*/
 const std::string &RequestParser::getBodyFile() const
 {
 	return (this->mTempPostFile);
 }
 
+/**
+	\brief Looks for and returns body size from content length header field
+*/
 size_t RequestParser::getContentLength()
 {
 	size_t result;
@@ -348,9 +394,12 @@ size_t RequestParser::getContentLength()
 		lengthStream >> result;
 		return result;
 	}
-	return 0;
+	return (0);
 }
 
+/**
+	\brief Resets variables in-between requests
+*/
 void RequestParser::reset()
 {
 	mMethod = UNKNOWN;
@@ -368,41 +417,57 @@ void RequestParser::reset()
 	mState = HEADER;
 }
 
+/**
+	\brief Getter for request header, used to log HTTP request
+*/
 std::string &RequestParser::getRequestHeader()
 {
-	return this->mRequestHeader;
+	return (this->mRequestHeader);
 }
 
+/**
+	\brief Getter for request method
+*/
 RequestMethod RequestParser::getMethod()
 {
-	return this->mMethod;
+	return (this->mMethod);
 }
 
+/**
+	\brief Getter for request uri
+*/
 std::string &RequestParser::getUri()
 {
-	return this->mRequestUri;
+	return (this->mRequestUri);
 }
 
+/**
+	\brief Getter for request header fields, given as a map
+*/
 std::map<std::string, std::string> &RequestParser::getHeaders()
 {
-	return this->mHeaderField;
+	return (this->mHeaderField);
 }
 
+/**
+	\brief Getter for cookies found in request
+*/
 std::string &RequestParser::getCookies()
 {
 	return (this->mCookies);
 }
 
+/**
+	\brief returns true if parsing is finished
+*/
 bool RequestParser::getParsingFinished() const
 {
 	return this->mParsingFinished;
 }
 
-void RequestParser::setHeaderEnd(const size_t &headerEnd)
-{
-	this->mHeaderEnd = headerEnd;
-}
-
+/**
+	\brief Setter for request method
+*/
 void RequestParser::setMethod(const std::string &methodStr)
 {
 	if (methodStr == "GET")
@@ -423,6 +488,9 @@ void RequestParser::setMethod(const std::string &methodStr)
 	}
 }
 
+/**
+	\brief Getter for total request count
+*/
 int RequestParser::getRequestCount()
 {
 	return (this->mRequestCount);

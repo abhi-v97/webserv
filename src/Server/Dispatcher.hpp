@@ -39,7 +39,7 @@ public:
 	void			createClientHandler(int socketFd, ServerConfig *srv, Listener *listener);
 	void			createCgiHandler(ClientHandler *client, RouteResult &route);
 	void			removeHandler(int &pollNum);
-	Session		   *addSession(std::string sessionId);
+	Session		   *addSession(const std::string &sessionId);
 	Session		   *getSession(const std::string &sessionId);
 	void			deleteSession(const std::string &sessionId);
 	RequestManager &getRouter();

@@ -27,12 +27,14 @@ ClientHandler::ClientHandler(int		   socketFd,
 	mParser.mClient = this;
 }
 
-ClientHandler::~ClientHandler()
-{
-}
-
 /**
+	\brief function called when a poll event is fired
 
+	\param pollStruct pollfd struct that triggered the event
+
+	If the event is POLLIN, the client has sent more request data which needs to be processed by
+   RequestParser.
+   If the event is POLLOUT, the client's request is ready to be sent to the socket.
 */
 void ClientHandler::handleEvents(pollfd &pollStruct)
 {
@@ -143,7 +145,7 @@ bool ClientHandler::generateResponse()
 	if (mParser.getParsingFinished() == false)
 		return (false);
 
-	RouteResult route = mDispatch->getRouter().route(mParser, mConfig, mSession);
+	RouteResult route = mDispatch->getRouter().route(mParser, mConfig);
 	route.keepAlive = mParser.getKeepAliveRequest();
 	setSession(route);
 	if (route.type == RR_ERROR)

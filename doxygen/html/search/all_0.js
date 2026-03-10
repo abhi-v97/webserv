@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['acceptconnection_0',['acceptConnection',['../class_web_server.html#af34384f8dd9cd6a232dcaa99f152a201',1,'WebServer']]]
+  ['addsession_0',['addSession',['../d2/d3f/class_dispatcher.html#afa6ed428aea315bfe361ff6e52c31a4f',1,'Dispatcher']]],
+  ['autoindex_1',['AutoIndex',['../df/dd8/class_auto_index.html',1,'']]]
 ];
