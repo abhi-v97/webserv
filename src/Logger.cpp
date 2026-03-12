@@ -15,19 +15,23 @@ Logger *Logger::mLogger = NULL;
 */
 
 /**
-	\brief constructor for the Logger object, creates a log file on startup using current date and
-   time as its name
+	\brief constructor for the Logger object. 
+	opens two log file on startup:
+	- a file named "access.log" for access logs NOTICE, INFO and DEBUG messages (request traffic)
+	- a file named "error.log" for error logs WARNING, ERROR and FATAL messages (problems)
 */
 Logger::Logger()
 {
-	std::time_t timeNow;
-	struct tm  *timeStruct;
-	char		buffer[BUF_SIZE];
+	mAccessFile.open("access.log", std::ios::app);
+	mErrorFile.open("error.log", std::ios::app);
+	// std::time_t timeNow;
+	// struct tm  *timeStruct;
+	// char		buffer[BUF_SIZE];
 
-	std::time(&timeNow);
-	timeStruct = std::localtime(&timeNow);
-	std::strftime(buffer, BUF_SIZE, "%d/%m/%Y_%H:%M:%S.log", timeStruct);
-	Logger::mFile.open(buffer, std::ios::app);
+	// std::time(&timeNow);
+	// timeStruct = std::localtime(&timeNow);
+	// std::strftime(buffer, BUF_SIZE, "%d/%m/%Y_%H:%M:%S.log", timeStruct);
+	// Logger::mFile.open(buffer, std::ios::app);
 }
 
 /*
@@ -48,7 +52,9 @@ void Logger::deleteInstance()
 
 Logger::~Logger()
 {
-	Logger::mFile.close();
+	// Logger::mFile.close();
+	mAccessFile.close();
+	mErrorFile.close();
 }
 
 /*
@@ -121,8 +127,17 @@ void Logger::log(LogLevel level, const std::string &msg)
 	buf << msg << '\n';
 
 	std::string line = buf.str();
-	mFile << line;
-	mFile.flush();
+	//route log message to the correct file based on its level
+	if (level >= WARNING) {
+		mErrorFile << line;
+		mErrorFile.flush();
+	}
+	else {
+		mAccessFile << line;
+		mAccessFile.flush();
+	}
+	// mFile << line;
+	// mFile.flush();
 	std::cout << line;
 	std::cout.flush();
 }

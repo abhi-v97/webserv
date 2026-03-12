@@ -1,4 +1,5 @@
 #include "AutoIndex.hpp"
+#include "../Logger.hpp"
 
 #include <iomanip>
 #include <sstream>
@@ -6,6 +7,8 @@
 #include <vector>
 #include <algorithm>
 #include <dirent.h>
+#include <cerrno>
+#include <cstring>
 
 AutoIndex::AutoIndex() {}
 
@@ -22,9 +25,14 @@ AutoIndex::~AutoIndex() {}
  */
 
 std::string AutoIndex::generatePage(const std::string& dirPath, const std::string &uri) const {
+    LOG_DEBUG("AutoIndex::generatePage called for dir=" + dirPath + " uri=" + uri);
+
     DIR *dir = opendir(dirPath.c_str());
-    if (!dir)
+    if (!dir) {
+        LOG_ERROR("Autoindex: opendir failed for \"" + dirPath + "\": " + std::strerror(errno));
         return ("");
+    }
+        
 
     //collect entries in a vector contained so we can sort them alphabetically
     std::vector<Entry> entries;
@@ -43,9 +51,10 @@ std::string AutoIndex::generatePage(const std::string& dirPath, const std::strin
         fullPath += name;
 
         struct stat st;
-        if (stat(fullPath.c_str(), &st) != 0)
+        if (stat(fullPath.c_str(), &st) != 0) {
+            LOG_WARNING("Autoindex: stat failed for \"" + fullPath + "\": " + std::strerror(errno));
             continue;
-
+        }
         Entry e;
         e.name = name;
         e.isDir = S_ISDIR(st.st_mode);
@@ -54,7 +63,9 @@ std::string AutoIndex::generatePage(const std::string& dirPath, const std::strin
         entries.push_back(e);
     }
     closedir(dir);
-        
+    
+    LOG_DEBUG("AutoIndex: found " + numToString(entries.size()) + " entries in " + dirPath );
+
     // sort: directories first then alphabetically withing each group (dir/dir/file)
     for (size_t i = 0; i < entries.size(); i++) {
         for (size_t j = i + 1; j < entries.size(); j++) {
@@ -107,6 +118,9 @@ std::string AutoIndex::generatePage(const std::string& dirPath, const std::strin
         << "  <small>webserv</small>\n"
         << "</body>\n"
         << "</html>\n";
+    
+    LOG_INFO("AutoIndex: generated HTML page for \"" + baseUri + "\" (" + numToString(entries.size()) + " entries)");
+    
     return html.str();
 }
 
