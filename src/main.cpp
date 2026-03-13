@@ -36,14 +36,15 @@ int main(int argc, char **argv)
 	}
 
 	if (dispatch.setListeners() == false)
-		return (1);
+		return (Logger::deleteInstance(), 1);
 
 	// load supported types
 	MimeTypes::getInstance()->loadFromFile("mime.types");
 
 	dispatch.loop();
 
-	Logger::deleteInstance();
 	MimeTypes::deleteInstance();
+	LOG_NOTICE("Web server shutting down");
+	Logger::deleteInstance();
 	return (0);
 }

@@ -301,7 +301,6 @@ void CgiHandler::handleEvents(struct pollfd &pollStruct)
 		}
 		return;
 	}
-
 	if (pollStruct.fd == mInFd[1] && (pollStruct.revents & POLLOUT))
 	{
 		if (mReqBodyFd < 0)
@@ -367,31 +366,6 @@ void CgiHandler::handleEvents(struct pollfd &pollStruct)
 				}
 			}
 		}
-		// const std::string &reqBodyFile = mClient->getRequestBodyFile();
-		// std::ifstream	   inf(reqBodyFile.c_str());
-		// std::stringstream  buffer;
-		// buffer << inf.rdbuf();
-
-		// const std::string &reqBody = buffer.str();
-		// while (!reqBody.empty())
-		// {
-		// 	if (waitpid(-1, NULL, WNOHANG) > 0)
-		// 		break;
-		// 	ssize_t written = write(mInFd[1], reqBody.data(), reqBody.size());
-		// 	if (written > 0)
-		// 		mInBytesWritten += written;
-		// 	else
-		// 	{
-		// 		// fatal error
-		// 		// pollStruct.events &= ~POLLOUT;
-		// 		// std::cout << "cgi issue: " << std::strerror(errno) << std::endl;
-		// 		break;
-		// 	}
-		// }
-		// if (mInBytesWritten >= reqBody.size())
-		// {
-		// 	pollStruct.events &= ~POLLOUT;
-		// }
 		return;
 	}
 }
@@ -506,9 +480,6 @@ void CgiHandler::setCgiResponse()
 	finalResponse << body;
 	clientResponse = finalResponse.str();
 	mKeepAlive = false;
-
-	// cleanup
-	std::remove(mClient->getRequestBodyFile().c_str());
 }
 
 /*

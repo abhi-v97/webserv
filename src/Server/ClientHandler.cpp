@@ -45,8 +45,9 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 		if (this->parseRequest() == true)
 		{
 			if (mParser.getRequestHeader().size() < 200)
-				LOG_NOTICE(std::string("client " + numToString(mSocketFd) + ", server " + mConfig->serverName +
-								   ", request: \"" + mParser.getRequestHeader() + "\""));
+				LOG_NOTICE(std::string("client " + numToString(mSocketFd) + ", server " +
+									   mConfig->serverName + ", request: \"" +
+									   mParser.getRequestHeader() + "\""));
 			pollStruct.events |= POLLOUT;
 		}
 	}
@@ -63,6 +64,7 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 				mCgiStart = NULL;
 				mParser.reset();
 				mResponseObj.reset();
+				std::remove(getRequestBodyFile().c_str());
 				// see if another request is queued up
 				parseRequest();
 			}
@@ -117,11 +119,7 @@ bool ClientHandler::parseRequest()
 
 	if (mParser.parse(mRequest) == false)
 	{
-		// LOG_ERROR(std::string("parseRequest(): client " + numToString(mSocketFd) +
-		// 					  ": invalid HTTP request, closing connection"));
-		// mKeepAlive = false;
-		// return (false);
-		// mRequest.clear();
+		mRequest.clear();
 	}
 	return (mParser.getParsingFinished());
 }
@@ -144,10 +142,7 @@ bool ClientHandler::generateResponse()
 	route.keepAlive = mParser.getKeepAliveRequest();
 	setSession(route);
 	if (route.type == RR_ERROR)
-	{
-		
 		mResponseObj.buildErrorResponse(route);
-	}
 	else if (route.type == RR_BASIC)
 		mResponseObj.buildSimpleResponse(route.status, route.bodyMsg);
 	else if (route.type == RR_GET)
@@ -193,20 +188,10 @@ bool ClientHandler::sendResponse()
 		else
 			return (false);
 	}
-	if (mIsCgi == true)
-	{
-		bytes = send(mSocketFd,
-					 mResponseObj.mResponse.c_str() + mBytesSent,
-					 mResponseObj.mResponse.size() - mBytesSent,
-					 MSG_NOSIGNAL);
-	}
-	else
-	{
-		bytes = send(mSocketFd,
-					 mResponseObj.mResponse.c_str() + mBytesSent,
-					 mResponseObj.mResponse.size() - mBytesSent,
-					 MSG_NOSIGNAL);
-	}
+	bytes = send(mSocketFd,
+				 mResponseObj.mResponse.c_str() + mBytesSent,
+				 mResponseObj.mResponse.size() - mBytesSent,
+				 MSG_NOSIGNAL);
 	if (bytes > 0)
 		mBytesSent += bytes;
 	else

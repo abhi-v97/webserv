@@ -23,7 +23,6 @@ Dispatcher::Dispatcher(): mRequestManager(this)
 
 Dispatcher::~Dispatcher()
 {
-	LOG_NOTICE("destructor called, web server shutting down");
 	std::signal(SIGINT, SIG_DFL);
 	for (int i = 0; i < mPollFds.size(); i++)
 	{

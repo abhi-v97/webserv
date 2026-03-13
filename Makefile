@@ -1,7 +1,7 @@
 NAME = webserv
 
 CC = clang++
-CFLAGS = -g -std=c++98 -march=native -fno-limit-debug-info 
+CFLAGS = -g -std=c++98 -march=native -fno-limit-debug-info  
 # -Wall -Wextra -Werror
 
 OBJ_DIR = obj

@@ -137,15 +137,17 @@ void ResponseBuilder::buildPartialResponse(RouteResult &route)
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
 void ResponseBuilder::buildErrorResponse(RouteResult &route)
 {
-	std::string errorPage = mConfig->root + mConfig->errorPages[route.status];
+	std::string errorPage = mConfig->errorPages[route.status];
 
 	mStatus = route.status;
 	mResponseStream << "HTTP/1.1 " << numToString(mStatus) << "\r\nContent-Type: text/html\r\n";
 	addConnectionField(route.keepAlive);
-	std::ifstream inf(errorPage.c_str());
-	if (inf.good() && mParser->getMethod() != HEAD)
+	if (!errorPage.empty() && mParser->getMethod() != HEAD)
 	{
 		std::ostringstream body;
+
+		errorPage = mConfig->root + mConfig->errorPages[route.status];
+		std::ifstream inf(errorPage.c_str());
 
 		body << inf.rdbuf();
 		size_t size = body.str().size();

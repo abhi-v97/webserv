@@ -66,6 +66,7 @@ RouteResult RequestManager::route(RequestParser &parser, ServerConfig *srv)
 	result.keepAlive = false;
 	result.partialLength = 0;
 	result.partialOffset = 0;
+	result.type = RR_BASIC;
 	validateUri(uri, parser, srv, result);
 	parseRangeHeader(parser, result);
 	return (result);
@@ -340,16 +341,6 @@ bool RequestManager::checkMethod(RequestParser &parser, ServerConfig *srv, Route
 		if (loc.methods[i] == methodStr)
 			break;
 	}
-	// if (method == POST)
-	// {
-	// 	int size = atoi(parser.getHeaders()["content-length"].c_str());
-		
-	// 	if (size == 0)
-	// 	{
-	// 		setError(405, "Bad Request", out);
-	// 		return (true);
-	// 	}
-	// }
 	if (find(loc.methods.begin(), loc.methods.end(), methodStr) == loc.methods.end())
 		return (false);
 	return (true);
@@ -390,11 +381,6 @@ bool RequestManager::checkPermissions(RequestMethod method, RouteResult &out)
 		setError(403, "Failed to delete resource: Missing permissions", out);
 		return (false);
 	}
-	// else if (out.type == RR_CGI && access(uri.c_str(), X_OK))
-	// {
-	// 	setError(403, "Failed to execute resource: Missing permissions", out);
-	// 	return (false);
-	// }
 	return (true);
 }
 
@@ -446,6 +432,9 @@ bool RequestManager::deleteMethod(RouteResult &out)
 		setError(500, "Internal Server Error: failed to write POST message", out);
 		return (false);
 	}
+	out.type = RR_BASIC;
+	out.status = 204;
+	out.bodyMsg = "";
 	return (true);
 }
 

@@ -69,7 +69,7 @@ Accept-Language: en-US,en;q=0.5
 Authorization: Bearer <token>
 ```
 
-#### Reqeust body
+#### Request body
 
 The body contains data sent to the server, typically with PUT or POST requests. It can be in the form of JSON data, form data, or raw text. The format is specified by the `Content-Type` header field.
 
@@ -112,7 +112,7 @@ Here's a list of features that are supported:
 Run with make:
 
 ```
-make
+make [config.conf]
 ```
 
 then test with browser URL: http://address:port, eg http://localhost:8080.
@@ -130,3 +130,10 @@ netcat -v -C localhost 8080
 ```
 
 ### Resouces
+
+- [RFC 9112](https://www.rfc-editor.org/rfc/rfc9112.html): HTTP/1.1 RFC 
+- [Doxygen Commands](https://www.doxygen.nl/manual/commands.html): Used for documentation
+- [HTTP Status Codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status): HTTP Response Codes
+- [Nginx docs](https://nginx.org/en/docs/): Nginx documentation, used for config files
+- [Reactor Pattern](https://www.dre.vanderbilt.edu/~schmidt/PDF/reactor-siemens.pdf): Paper on reactor pattern
+- [RFC 3875](https://datatracker.ietf.org/doc/html/rfc3875): CGI RFC

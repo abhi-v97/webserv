@@ -7,7 +7,7 @@ print("Content-Type: text/html\n")
 
 def get_server_uptime():
     try:
-        cmd = "ps -C apache2 -o etime= | head -n 1"
+        cmd = "ps -C webserv -o etime= | head -n 1"
         process_time = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
         
         system_uptime = subprocess.check_output("uptime -p", shell=True).decode('utf-8').strip()

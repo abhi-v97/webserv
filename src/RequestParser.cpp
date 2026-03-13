@@ -88,13 +88,6 @@ bool RequestParser::parse(std::string &requestBuffer)
 		if (parseBody(requestBuffer) == false)
 			return (false);
 	}
-	// if (mMethod == POST)
-	// {
-	// 	size_t maxLength = mClient->mConfig->clientMaxBodySize;
-
-	// 	if (maxLength && mBodySize > maxLength)
-	// 		return (handleError(413, "Content too large."), false);
-	// }
 	if (mParsePos > 0)
 	{
 		requestBuffer.erase(0, mParsePos);
@@ -132,7 +125,7 @@ bool RequestParser::parseHeader(const std::string &header)
 	int versionEnd = header.find_first_of('\r', uriEnd + 1);
 	mHttpVersion = header.substr(uriEnd + 1, 8);
 	if (mHttpVersion != "HTTP/1.1" && mHttpVersion != "HTTP/1.0")
-		return (handleError(400, "Bad or invalid HTTP version"), false);
+		return (handleError(505, "Bad or invalid HTTP version"), false);
 
 	// advance state
 	mState = FIELD;
@@ -158,7 +151,7 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 
 	std::string fieldName = rawFieldName.substr(firstChar, lastChar - firstChar);
 	if (fieldName.find_first_of(" \t") != std::string::npos)
-		return (false);
+		return (handleError(400, "Invalid HTTP header field"), false);
 	for (std::string::iterator it = fieldName.begin(); it != fieldName.end(); it++)
 		*it = std::tolower(static_cast<unsigned char>(*it));
 
@@ -282,13 +275,13 @@ bool RequestParser::parseBody(std::string &request)
 				return true;
 			}
 		}
-		// else
-		// {
-		// 	size_t maxLength = mClient->mConfig->clientMaxBodySize;
+		else
+		{
+			size_t maxLength = mClient->mConfig->clientMaxBodySize;
 
-		// 	if (maxLength && bodyExpected > maxLength)
-		// 		return (handleError(413, "Content too large."), false);
-		// }
+			if (maxLength && bodyExpected > maxLength)
+				return (handleError(413, "Content too large."), false);
+		}
 		bodyReceived = 0;
 		bodyToFile = false;
 		bodyFd = -1;
