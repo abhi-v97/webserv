@@ -117,7 +117,9 @@ protected:
 	Logger(); /**< Private constructor */
 
 private:
-	std::ofstream  mFile;	/**< log file stream object */
+	// std::ofstream  mFile;	/**< log file stream object */
+	std::ofstream mAccessFile; /**< access log file stream object */
+	std::ofstream mErrorFile;  /**< error log file stream object */
 	static Logger *mLogger; /**< Static pointer to singleton instance */
 };
 
