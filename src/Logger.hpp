@@ -24,6 +24,11 @@
 	- WARNING: warnings that don't halt execution
 	- ERROR: common errors that cause a halt in processing eg: closing client connection
 	- FATAL: anything that causes web server to shut down
+
+	## Log files
+	- access.log : DEBUG, INFO, NOTICE level messages
+	- error.log  : WARNING, ERROR, FATAL level messages
+	- stdout     : all levels
 */
 
 #define LOG_LEVEL_DEBUG 0
@@ -90,6 +95,11 @@ enum LogLevel
 /**
 	\class Logger
 	Logging class created using Singleton design pattern.
+
+	Writes to two log files:
+	  - access.log : DEBUG, INFO, NOTICE (normal request traffic)
+	  - error.log  : WARNING, ERROR, FATAL (problems and failures)
+	All levels are also written to stdout.
 */
 class Logger
 {
@@ -104,7 +114,8 @@ public:
 
 	/** log method
 
-		the log() method is used to log output to console and the log file.
+		the log() method is used to log output to console and the appropriate
+		log file (access.log or error.log).
 		\param level Enum which states the severity of the message
 		\param msg String to output as log message
 	*/
