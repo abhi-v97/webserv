@@ -122,7 +122,7 @@ void ResponseBuilder::buildPartialResponse(RouteResult &route)
 
 	std::string partialBody = body.str().substr(route.partialOffset, route.partialLength + 1);
 
-	LOG_DEBUG("response body size: " + numToString(newbody.size()));
+	LOG_DEBUG("response body size: " + numToString(partialBody.size()));
 	mResponseStream << "Content-Range: bytes " << route.partialOffset << "-"
 					<< route.partialLength + route.partialOffset << "/" << body.str().size();
 	mResponseStream << "\r\nContent-Length: " << route.partialLength + 1;
@@ -132,18 +132,36 @@ void ResponseBuilder::buildPartialResponse(RouteResult &route)
 	mResponseReady = true;
 }
 
-// TODO: add connection: close in response header when applicable
 // TODO: add a function that writes the name of the error code based on what error occurred next to
 // the Error code, so for 404 it returns "Not Found", for 500 its "Internal Server Error"
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
 void ResponseBuilder::buildErrorResponse(RouteResult &route)
 {
+	std::string errorPage = mConfig->errorPages[route.status];
+
 	mStatus = route.status;
-	mResponseStream << "HTTP/1.1 " << numToString(mStatus)
-					<< "\r\nContent-Type: text/html\r\nContent-Length: "
-					<< numToString(80 + route.bodyMsg.size())
-					<< "\r\n\r\n<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
-					<< numToString(mStatus) << "</h2><p> " << route.bodyMsg << "</p></html>";
+	mResponseStream << "HTTP/1.1 " << numToString(mStatus) << "\r\nContent-Type: text/html\r\n";
+	addConnectionField(route.keepAlive);
+	if (!errorPage.empty() && mParser->getMethod() != HEAD)
+	{
+		std::ostringstream body;
+
+		errorPage = mConfig->root + mConfig->errorPages[route.status];
+		std::ifstream inf(errorPage.c_str());
+
+		body << inf.rdbuf();
+		size_t size = body.str().size();
+		mResponseStream << "Content-Length: " << numToString(size) << "\r\n\r\n" << body.str();
+	}
+	else if (mParser->getMethod() != HEAD)
+	{
+		mResponseStream << "Content-Length: " << numToString(81 + route.bodyMsg.size())
+						<< "\r\n\r\n"
+						<< "<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
+						<< numToString(mStatus) << "</h2><p> " << route.bodyMsg << "</p></html>";
+	}
+	else if (mParser->getMethod() == HEAD)
+		mResponseStream << "Content-Length: 0\r\n\r\n";
 	mResponse = mResponseStream.str();
 	LOG_ERROR("ResponseBuilder: Error status: " + numToString(mStatus) + ": " + route.bodyMsg);
 	LOG_DEBUG(mResponse);
@@ -160,8 +178,15 @@ void ResponseBuilder::buildAutoIndex(RouteResult &route)
 	addCookies();
 	mResponseStream << "Content-Type: text/html\r\nAccept-Ranges: bytes\r\n";
 	addConnectionField(route.keepAlive);
-	mResponseStream << "Content-Length: " << autoIndexBody.size();
-	mResponseStream << "\r\n\r\n" << autoIndexBody;
+	if (route.type != RR_HEAD)
+	{
+		mResponseStream << "Content-Length: " << autoIndexBody.size();
+		mResponseStream << "\r\n\r\n" << autoIndexBody;
+	}
+	else
+	{
+		mResponseStream << "Content-Length: 0\r\n\r\n";
+	}
 	mResponse = mResponseStream.str();
 	mResponseReady = true;
 }

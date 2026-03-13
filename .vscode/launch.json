@@ -6,7 +6,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/webserv",
 			"args": [
-				"default.conf"
+				"tester.conf"
 			],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",

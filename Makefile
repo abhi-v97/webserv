@@ -1,7 +1,7 @@
 NAME = webserv
 
 CC = clang++
-CFLAGS = -g -std=c++98 -march=native -fno-limit-debug-info 
+CFLAGS = -g -std=c++98 -march=native -fno-limit-debug-info  
 # -Wall -Wextra -Werror
 
 OBJ_DIR = obj
@@ -31,9 +31,7 @@ v valgrind: ${NAME}
 	valgrind --leak-check=full --show-leak-kinds=all --track-fds=yes -s ./${NAME}
 
 debug: CFLAGS += -D LOG_LEVEL=0
-debug: clean ${OBJS}
-	rm -f ${OBJS}
-	${NAME} -D LOG_LEVEL=0
+debug: all
 
 clean:
 	rm -f ${OBJS}

@@ -321,6 +321,13 @@ LocationConfig	configParser::parseLocationBlock()
 			configParser::parseReturn(loc);
 		else if (current.value == "cgi")
 			parseCgiBlock(loc);
+		else if (current.value == "alias")
+		{
+			advance();
+			loc.alias = current.value;
+			advance();
+			expect(SEMICOLON);
+		}
 		else
 			throw std::runtime_error("Unknown directive in location: " + current.value);
 	}
@@ -370,7 +377,7 @@ void configParser::parseAllowMethods(LocationConfig &loc)
 	while (current.type == WORD)
 	{
 		const std::string &m = current.value;
-		if (m != "GET" && m != "POST" && m != "DELETE")
+		if (m != "GET" && m != "POST" && m != "DELETE" && m != "HEAD")
 			throw std::runtime_error("Invalid method in allow_methods: " + m);
 
 		if (std::find(loc.methods.begin(), loc.methods.end(), m) == loc.methods.end())
@@ -393,12 +400,34 @@ void configParser::parseCgiBlock(LocationConfig &loc)
 			parseCgiPass(cfg);
 		else if (current.value == "cgi_param")
 			parseCgiParam(cfg);
+		else if (current.value == "allow_methods")
+			parseCgiMethod(cfg);
 		else
 			throw std::runtime_error("Unknown directive in cgi block: " + current.value);
 	}
 	expect(RBRACE);
 	loc.cgis.push_back(cfg);
 	loc.cgiEnabled = true;
+}
+
+
+void configParser::parseCgiMethod(CgiConfig &cfg)
+{
+	advance();
+	if (current.type != WORD)
+		throw std::runtime_error("Expected at least one method after allow_methods");
+
+	while (current.type == WORD)
+	{
+		const std::string &m = current.value;
+		if (m != "GET" && m != "POST" && m != "DELETE" && m != "HEAD")
+			throw std::runtime_error("Invalid method in allow_methods: " + m);
+
+		if (std::find(cfg.methods.begin(), cfg.methods.end(), m) == cfg.methods.end())
+			cfg.methods.push_back(m);
+		advance();
+	}
+	expect(SEMICOLON);
 }
 
 void configParser::parseCgiExtension(CgiConfig &cfg)

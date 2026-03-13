@@ -25,6 +25,7 @@ ClientHandler::ClientHandler(int		   socketFd,
 	mParser.mResponse = &mResponseObj;
 	mResponseObj.mParser = &mParser;
 	mParser.mClient = this;
+	mResponseObj.mConfig = mConfig;
 }
 
 /**
@@ -43,8 +44,10 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 		this->readSocket();
 		if (this->parseRequest() == true)
 		{
-			LOG_NOTICE(std::string("client " + mClientIp + ", server " + mConfig->serverName +
-								   ", request: \"" + mParser.getRequestHeader() + "\""));
+			if (mParser.getRequestHeader().size() < 200)
+				LOG_NOTICE(std::string("client " + numToString(mSocketFd) + ", server " +
+									   mConfig->serverName + ", request: \"" +
+									   mParser.getRequestHeader() + "\""));
 			pollStruct.events |= POLLOUT;
 		}
 	}
@@ -54,7 +57,6 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 		{
 			if (sendResponse() == true)
 			{
-				mKeepAlive = mParser.getKeepAliveRequest();
 				mRequestNum++;
 				mBytesSent = 0;
 				mIsCgi = false;
@@ -62,6 +64,7 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 				mCgiStart = NULL;
 				mParser.reset();
 				mResponseObj.reset();
+				std::remove(getRequestBodyFile().c_str());
 				// see if another request is queued up
 				parseRequest();
 			}
@@ -77,14 +80,14 @@ void ClientHandler::handleEvents(pollfd &pollStruct)
 */
 void ClientHandler::readSocket()
 {
-	char	buffer[4096];
+	char	buffer[16384];
 	ssize_t bytesRead;
 
 	// don't read next data until you are finished with all requests from the previous read
 	if (mParser.getParsingFinished())
 		return;
 
-	bytesRead = recv(mSocketFd, buffer, 4096, 0);
+	bytesRead = recv(mSocketFd, buffer, 16384, 0);
 	if (bytesRead < 0)
 	{
 		LOG_WARNING(std::string("readSocket(): client " + numToString(mSocketFd)) +
@@ -116,16 +119,6 @@ bool ClientHandler::parseRequest()
 
 	if (mParser.parse(mRequest) == false)
 	{
-		// TODO: close the connection only for terrible requests
-		// if the request error was 400 (bad format) or 404 (file not found), there's no need to
-		// close the connection straight away
-		// close it for errors where we do not know where the next request may start on the socket
-		// stream, eg payload too large, 414 uri too long, or 408 request timeout (if implemented)
-
-		// LOG_ERROR(std::string("parseRequest(): client " + numToString(mSocketFd) +
-		// 					  ": invalid HTTP request, closing connection"));
-		// mKeepAlive = false;
-		// return (false);
 		mRequest.clear();
 	}
 	return (mParser.getParsingFinished());
@@ -171,6 +164,7 @@ bool ClientHandler::generateResponse()
 	{
 		LOG_ERROR("RequestManager failed to find a valid route for this request");
 	}
+	mKeepAlive = route.keepAlive;
 	return (true);
 }
 
@@ -186,7 +180,7 @@ bool ClientHandler::sendResponse()
 
 	if (mIsCgi == true && mIsCgiDone == false)
 	{
-		if (time(NULL) - mCgiStart > 60)
+		if (time(NULL) - mCgiStart > 1200)
 		{
 			mResponseObj.buildSimpleResponse(500, "CGI Timeout Error");
 			mDispatch->closeCgi(mCgiFd);
@@ -194,32 +188,22 @@ bool ClientHandler::sendResponse()
 		else
 			return (false);
 	}
-	if (mIsCgi == true)
-	{
-		bytes = send(mSocketFd,
-					 mResponseObj.mResponse.c_str() + mBytesSent,
-					 mResponseObj.mResponse.size() - mBytesSent,
-					 MSG_NOSIGNAL);
-	}
-	else
-	{
-		bytes = send(mSocketFd,
-					 mResponseObj.mResponse.c_str() + mBytesSent,
-					 mResponseObj.mResponse.size() - mBytesSent,
-					 MSG_NOSIGNAL);
-	}
+	bytes = send(mSocketFd,
+				 mResponseObj.mResponse.c_str() + mBytesSent,
+				 mResponseObj.mResponse.size() - mBytesSent,
+				 MSG_NOSIGNAL);
 	if (bytes > 0)
 		mBytesSent += bytes;
 	else
 		return (true);
 	if (mResponseObj.mStatus >= 400)
 	{
-		LOG_ERROR("sendResponse: client " + mListener->getIp() + ", status " +
+		LOG_ERROR("sendResponse: client " + numToString(mSocketFd) + ", status " +
 				  numToString(mResponseObj.mStatus) + " total size " + numToString(mBytesSent));
 	}
 	else
 	{
-		LOG_NOTICE("sendResponse: client " + mListener->getIp() + ", status " +
+		LOG_NOTICE("sendResponse: client " + numToString(mSocketFd) + ", status " +
 				   numToString(mResponseObj.mStatus) + ", total size " + numToString(mBytesSent));
 	}
 	return mBytesSent == mResponseObj.mResponse.size();
@@ -242,9 +226,7 @@ void ClientHandler::setSession(RouteResult &out)
 		id = cookies.substr(sessIdStart + 8, 12);
 		session = mDispatch->getSession(id);
 		if (!session)
-		{
-			// TODO: check for invalid session ID
-		}
+			;
 		else if (!mSession)
 		{
 			mSession = session;
@@ -253,13 +235,14 @@ void ClientHandler::setSession(RouteResult &out)
 		}
 		else if (mSession != session)
 		{
-			// TODO: wrong session ID provided, send an error and close connection
+			out.type = RR_ERROR;
+			out.status = 401;
+			out.bodyMsg = "Invalid session ID";
 			LOG_ERROR("Session id mismatch");
 			return;
 		}
 		else if (now - session->lastAccessed > 1800)
 		{
-			// TODO: maybe respond with a session timed out message?
 			mDispatch->deleteSession(id);
 		}
 		else
@@ -271,7 +254,9 @@ void ClientHandler::setSession(RouteResult &out)
 	sessIdStart = cookies.find("session", sessIdStart + 8);
 	if (sessIdStart != std::string::npos)
 	{
-		// TODO:: two sessions found...
+		out.type = RR_ERROR;
+		out.status = 401;
+		out.bodyMsg = "Invalid session ID";
 		return;
 	}
 	if (!sessionFound)

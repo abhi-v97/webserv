@@ -6,6 +6,7 @@
 #include <string>
 #include <unistd.h>
 
+#include "ClientHandler.hpp"
 #include "Logger.hpp"
 #include "RequestParser.hpp"
 #include "Utils.hpp"
@@ -16,7 +17,7 @@
 RequestParser::RequestParser()
 	: mMethod(UNKNOWN), bodyToFile(false), mParsingFinished(false), mChunkedRequest(false),
 	  bodyFd(-1), bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mParsePos(0), mChunkSize(0),
-	  mClientNum(), mStatusCode(200), mRequestCount(0), mState(HEADER)
+	  mBodySize(0), mRequestCount(0), mState(HEADER)
 {
 }
 
@@ -91,6 +92,8 @@ bool RequestParser::parse(std::string &requestBuffer)
 	{
 		requestBuffer.erase(0, mParsePos);
 		mParsePos = 0;
+		if (mState == BODY && !requestBuffer.empty())
+			return (parse(requestBuffer));
 	}
 	return (true);
 }
@@ -122,7 +125,7 @@ bool RequestParser::parseHeader(const std::string &header)
 	int versionEnd = header.find_first_of('\r', uriEnd + 1);
 	mHttpVersion = header.substr(uriEnd + 1, 8);
 	if (mHttpVersion != "HTTP/1.1" && mHttpVersion != "HTTP/1.0")
-		return (handleError(400, "Bad or invalid HTTP version"), false);
+		return (handleError(505, "Bad or invalid HTTP version"), false);
 
 	// advance state
 	mState = FIELD;
@@ -148,7 +151,7 @@ bool RequestParser::parseHeaderField(std::string &buffer)
 
 	std::string fieldName = rawFieldName.substr(firstChar, lastChar - firstChar);
 	if (fieldName.find_first_of(" \t") != std::string::npos)
-		return (false);
+		return (handleError(400, "Invalid HTTP header field"), false);
 	for (std::string::iterator it = fieldName.begin(); it != fieldName.end(); it++)
 		*it = std::tolower(static_cast<unsigned char>(*it));
 
@@ -178,16 +181,16 @@ unsigned int hexToInt(std::string &hex)
 	for (std::string::iterator it = hex.begin(); it != hex.end(); it++)
 	{
 		if (*it >= '0' && *it <= '9')
-			value += *it - '0';
+			value = *it - '0';
 		else if (*it >= 'A' && *it <= 'F')
-			value += *it - 'A' + 10;
+			value = *it - 'A' + 10;
 		else if (*it >= 'a' && *it <= 'f')
-			value += *it - 'a' + 10;
+			value = *it - 'a' + 10;
 		else
 			break; // stop at invalid character
 
-		// result = result * 16 + value;
-		result = (result << 4) | value;
+		result = result * 16 + value;
+		// result = (result << 4) | value;
 	}
 	return (result);
 }
@@ -209,6 +212,7 @@ bool RequestParser::parseChunked(std::string &request)
 		mChunkSize = hexToInt(hexSize);
 		if (mChunkSize == 0)
 		{
+			LOG_DEBUG("parsing chunked body done");
 			endPos = request.find("\r\n", endPos + 2);
 			if (endPos == std::string::npos)
 				return (true);
@@ -217,7 +221,6 @@ bool RequestParser::parseChunked(std::string &request)
 			mParsePos = endPos + 2;
 			return (true);
 		}
-
 		mParsePos += endPos + 2;
 	}
 	size_t available = request.size() - mParsePos;
@@ -228,6 +231,7 @@ bool RequestParser::parseChunked(std::string &request)
 		ssize_t bytesWritten = write(bodyFd, request.data() + bodyStart, toWrite);
 		if (bytesWritten < 0)
 			return (false);
+		mBodySize += bytesWritten;
 		bodyReceived += static_cast<size_t>(bytesWritten);
 		mParsePos = bodyStart + bytesWritten;
 		if (bodyReceived >= mChunkSize)
@@ -236,8 +240,8 @@ bool RequestParser::parseChunked(std::string &request)
 			bodyReceived = 0;
 			if (request.find("\r\n", mParsePos) == std::string::npos)
 			{
-				// TODO: I think you're supposed to set a 400 bad request here
-				return (false);
+				// couldn't find end of chunk, wait for more data.
+				return (true);
 			}
 			mParsePos += 2;
 		}
@@ -252,7 +256,6 @@ bool RequestParser::parseChunked(std::string &request)
 */
 bool RequestParser::parseBody(std::string &request)
 {
-	LOG_DEBUG("parsing body");
 	// init vars, triggered on first call
 	if (bodyExpected == 0 && mChunkedRequest == false)
 	{
@@ -265,13 +268,20 @@ bool RequestParser::parseBody(std::string &request)
 				mChunkedRequest = true;
 			else
 			{
+				LOG_DEBUG("parsing body done");
 				mParsingFinished = true;
 				mState = DONE;
 				mRequestCount++;
 				return true;
 			}
 		}
+		else
+		{
+			size_t maxLength = mClient->mConfig->clientMaxBodySize;
 
+			if (maxLength && bodyExpected > maxLength)
+				return (handleError(413, "Content too large."), false);
+		}
 		bodyReceived = 0;
 		bodyToFile = false;
 		bodyFd = -1;
@@ -295,10 +305,10 @@ bool RequestParser::parseBody(std::string &request)
 		ssize_t bytesWritten = write(bodyFd, request.data(), toWrite);
 		if (bytesWritten < 0)
 			return (handleError(500, "Failed to write to requested resource"), false);
+		mBodySize += bytesWritten;
 		bodyReceived += static_cast<size_t>(bytesWritten);
 		mParsePos = bodyStart + bytesWritten;
 	}
-
 	if (bodyReceived >= bodyExpected)
 	{
 		mParsingFinished = true;
@@ -405,14 +415,19 @@ void RequestParser::reset()
 	mMethod = UNKNOWN;
 	bodyToFile = false;
 	mParsingFinished = false;
+	mChunkedRequest = false;
 	bodyFd = -1;
 	bodyExpected = 0;
 	bodyReceived = 0;
 	mHeaderEnd = 0;
 	mParsePos = 0;
+	mChunkSize = 0;
+	mBodySize = 0;
 	mRequestUri.clear();
 	mHttpVersion.clear();
 	mHeaderField.clear();
+	mRequestHeader.clear();
+	mTempPostFile.clear();
 	mCookies.clear();
 	mState = HEADER;
 }
