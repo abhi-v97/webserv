@@ -293,6 +293,17 @@ bool RequestManager::validateRequest(RequestParser &parser, ServerConfig *srv, R
 		}
 		return (true);
 	}
+	else if (out.type != RR_CGI && method == POST)
+	{
+		size_t maxLength = srv->clientMaxBodySize;
+
+		if (maxLength && parser.mBodySize && parser.mBodySize > maxLength)
+		{
+			setError(413, "Content too large", out);
+			out.keepAlive = true;
+			return (false);
+		}
+	}
 	if (method == GET)
 	{
 		out.type = RR_GET;
@@ -409,7 +420,7 @@ bool RequestManager::writePost(RequestParser &parser, RouteResult &out)
 		setError(500, "Internal Server Error: failed to write POST message", out);
 		return (false);
 	}
-	outf << inf.rdbuf();
+	outf << inf.rdbuf() << "\r\n";
 	outf.close();
 	std::remove(bodyFile.c_str());
 	out.type = RR_BASIC;
@@ -484,4 +495,5 @@ void setError(int status, const std::string &bodyMsg, RouteResult &out)
 	out.status = status;
 	out.bodyMsg = bodyMsg;
 	out.type = RR_ERROR;
+	out.keepAlive = false;
 }

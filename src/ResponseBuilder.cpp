@@ -132,22 +132,34 @@ void ResponseBuilder::buildPartialResponse(RouteResult &route)
 	mResponseReady = true;
 }
 
-// TODO: add connection: close in response header when applicable
 // TODO: add a function that writes the name of the error code based on what error occurred next to
 // the Error code, so for 404 it returns "Not Found", for 500 its "Internal Server Error"
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
 void ResponseBuilder::buildErrorResponse(RouteResult &route)
 {
-	mStatus = route.status;
-	mResponseStream << "HTTP/1.1 " << numToString(mStatus)
-					<< "\r\nContent-Type: text/html\r\nContent-Length: "
-					<< numToString(81 + route.bodyMsg.size()) << "\r\n\r\n";
+	std::string errorPage = mConfig->root + mConfig->errorPages[route.status];
 
-	if (mParser->getMethod() != HEAD)
+	mStatus = route.status;
+	mResponseStream << "HTTP/1.1 " << numToString(mStatus) << "\r\nContent-Type: text/html\r\n";
+	addConnectionField(route.keepAlive);
+	std::ifstream inf(errorPage.c_str());
+	if (inf.good() && mParser->getMethod() != HEAD)
 	{
-		mResponseStream << "<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
+		std::ostringstream body;
+
+		body << inf.rdbuf();
+		size_t size = body.str().size();
+		mResponseStream << "Content-Length: " << numToString(size) << "\r\n\r\n" << body.str();
+	}
+	else if (mParser->getMethod() != HEAD)
+	{
+		mResponseStream << "Content-Length: " << numToString(81 + route.bodyMsg.size())
+						<< "\r\n\r\n"
+						<< "<!DOCTYPE html><html lang=\"en\"><h1>Webserv</h1><h2>Error: "
 						<< numToString(mStatus) << "</h2><p> " << route.bodyMsg << "</p></html>";
 	}
+	else if (mParser->getMethod() == HEAD)
+		mResponseStream << "Content-Length: 0\r\n\r\n";
 	mResponse = mResponseStream.str();
 	LOG_ERROR("ResponseBuilder: Error status: " + numToString(mStatus) + ": " + route.bodyMsg);
 	LOG_DEBUG(mResponse);
@@ -164,7 +176,7 @@ void ResponseBuilder::buildAutoIndex(RouteResult &route)
 	addCookies();
 	mResponseStream << "Content-Type: text/html\r\nAccept-Ranges: bytes\r\n";
 	addConnectionField(route.keepAlive);
-	if (route.type == RR_GET)
+	if (route.type != RR_HEAD)
 	{
 		mResponseStream << "Content-Length: " << autoIndexBody.size();
 		mResponseStream << "\r\n\r\n" << autoIndexBody;

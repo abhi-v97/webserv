@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang='en'>
+ <head>
+ <meta charset='UTF-8'>
+ <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+ <title>42 Webserv</title>
+<style>
+h1 { color: DodgerBlue; }
+body { font-family: Arial, sans-serif; background-color: GhostWhite; color: #333; margin: 2rem; }
+p { background-color: Gainsboro; padding: 1rem; border: 2px solid DeepSkyBlue; border-radius: 20px;  }
+a{ display: inline-block;
+  padding: 12px 24px;
+  text-decoration: none;
+  font-family: Arial, sans-serif;
+  background-color: #e9ecef; padding: 1rem;
+  color: #212529;
+  font-weight: 600;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: background-color 0.2s ease-in-out, transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  cursor: pointer; text-transform: none; }
+ </style>
+ </head>
+ <body>
+ <h1>42 Webserv</h1>
+<div class="grid">
+<section>
+<h2>Navigation Panel</h2>
+ <a href="/docs/index.html">Documentation</a>
+ <a href="/images/">Image Gallery</a>
+ <a href="/videos/">Video Gallery</a>
+</section><br />
+<section>
+<h2> General Tests </h2>
+</section><br />
+ <a href="/non-existent">404 Test</a><br /><br />
+<a href="/doxygen/html/index.html/">Redirect Test</a><br /><br />
+<section>
+<h2> CGI Tests </h2>
+</section><br />
+<a href="/cgi-bin/runtime.py">View server uptime</a><br /><br />
+<section>
+<h2>POST Upload Test</h2><br />
+ <form method="post" action="/uploads/form_data">
+    <label for="firstname">First name:</label>
+    <input type="text" name="firstname" /><br />
+    <label for="lastname">Last name:</label>
+    <input type="text" name="lastname" /><br /><br />
+    <input type="submit" value="Submit" />
+</form><br /><br />
+<a href="/uploads/">View uploaded files</a><br /><br />
+</section><br />
+<section>
+</section><br />
+</div>
+</body>
+</html>

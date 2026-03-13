@@ -6,6 +6,7 @@
 #include <string>
 #include <unistd.h>
 
+#include "ClientHandler.hpp"
 #include "Logger.hpp"
 #include "RequestParser.hpp"
 #include "Utils.hpp"
@@ -16,7 +17,7 @@
 RequestParser::RequestParser()
 	: mMethod(UNKNOWN), bodyToFile(false), mParsingFinished(false), mChunkedRequest(false),
 	  bodyFd(-1), bodyExpected(0), bodyReceived(0), mHeaderEnd(0), mParsePos(0), mChunkSize(0),
-	  mClientNum(), mStatusCode(200), mRequestCount(0), mState(HEADER)
+	  mBodySize(0), mRequestCount(0), mState(HEADER)
 {
 }
 
@@ -87,10 +88,19 @@ bool RequestParser::parse(std::string &requestBuffer)
 		if (parseBody(requestBuffer) == false)
 			return (false);
 	}
+	// if (mMethod == POST)
+	// {
+	// 	size_t maxLength = mClient->mConfig->clientMaxBodySize;
+
+	// 	if (maxLength && mBodySize > maxLength)
+	// 		return (handleError(413, "Content too large."), false);
+	// }
 	if (mParsePos > 0)
 	{
 		requestBuffer.erase(0, mParsePos);
 		mParsePos = 0;
+		if (mState == BODY && !requestBuffer.empty())
+			return (parse(requestBuffer));
 	}
 	return (true);
 }
@@ -209,6 +219,7 @@ bool RequestParser::parseChunked(std::string &request)
 		mChunkSize = hexToInt(hexSize);
 		if (mChunkSize == 0)
 		{
+			LOG_DEBUG("parsing chunked body done");
 			endPos = request.find("\r\n", endPos + 2);
 			if (endPos == std::string::npos)
 				return (true);
@@ -217,7 +228,6 @@ bool RequestParser::parseChunked(std::string &request)
 			mParsePos = endPos + 2;
 			return (true);
 		}
-
 		mParsePos += endPos + 2;
 	}
 	size_t available = request.size() - mParsePos;
@@ -228,6 +238,7 @@ bool RequestParser::parseChunked(std::string &request)
 		ssize_t bytesWritten = write(bodyFd, request.data() + bodyStart, toWrite);
 		if (bytesWritten < 0)
 			return (false);
+		mBodySize += bytesWritten;
 		bodyReceived += static_cast<size_t>(bytesWritten);
 		mParsePos = bodyStart + bytesWritten;
 		if (bodyReceived >= mChunkSize)
@@ -236,7 +247,7 @@ bool RequestParser::parseChunked(std::string &request)
 			bodyReceived = 0;
 			if (request.find("\r\n", mParsePos) == std::string::npos)
 			{
-				// TODO: I think you're supposed to set a 400 bad request here
+				// couldn't find end of chunk, wait for more data.
 				return (true);
 			}
 			mParsePos += 2;
@@ -252,7 +263,6 @@ bool RequestParser::parseChunked(std::string &request)
 */
 bool RequestParser::parseBody(std::string &request)
 {
-	LOG_DEBUG("parsing body");
 	// init vars, triggered on first call
 	if (bodyExpected == 0 && mChunkedRequest == false)
 	{
@@ -265,13 +275,20 @@ bool RequestParser::parseBody(std::string &request)
 				mChunkedRequest = true;
 			else
 			{
+				LOG_DEBUG("parsing body done");
 				mParsingFinished = true;
 				mState = DONE;
 				mRequestCount++;
 				return true;
 			}
 		}
+		// else
+		// {
+		// 	size_t maxLength = mClient->mConfig->clientMaxBodySize;
 
+		// 	if (maxLength && bodyExpected > maxLength)
+		// 		return (handleError(413, "Content too large."), false);
+		// }
 		bodyReceived = 0;
 		bodyToFile = false;
 		bodyFd = -1;
@@ -295,10 +312,10 @@ bool RequestParser::parseBody(std::string &request)
 		ssize_t bytesWritten = write(bodyFd, request.data(), toWrite);
 		if (bytesWritten < 0)
 			return (handleError(500, "Failed to write to requested resource"), false);
+		mBodySize += bytesWritten;
 		bodyReceived += static_cast<size_t>(bytesWritten);
 		mParsePos = bodyStart + bytesWritten;
 	}
-
 	if (bodyReceived >= bodyExpected)
 	{
 		mParsingFinished = true;
@@ -405,14 +422,19 @@ void RequestParser::reset()
 	mMethod = UNKNOWN;
 	bodyToFile = false;
 	mParsingFinished = false;
+	mChunkedRequest = false;
 	bodyFd = -1;
 	bodyExpected = 0;
 	bodyReceived = 0;
 	mHeaderEnd = 0;
 	mParsePos = 0;
+	mChunkSize = 0;
+	mBodySize = 0;
 	mRequestUri.clear();
 	mHttpVersion.clear();
 	mHeaderField.clear();
+	mRequestHeader.clear();
+	mTempPostFile.clear();
 	mCookies.clear();
 	mState = HEADER;
 }

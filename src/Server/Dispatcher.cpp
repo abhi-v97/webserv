@@ -94,7 +94,9 @@ void Dispatcher::loop()
 		for (int i = static_cast<int>(mPollFds.size()) - 1; i >= 0; i--)
 		{
 			if (mPollFds[i].revents != 0)
+			{
 				mHandler[mPollFds[i].fd]->handleEvents(mPollFds[i]);
+			}
 			if (mHandler[mPollFds[i].fd]->getKeepAlive() == false)
 				removeHandler(i);
 		}
@@ -186,7 +188,7 @@ bool Dispatcher::setListeners()
 	for (std::map<int, IHandler *>::const_iterator it = mHandler.begin(); it != mHandler.end();
 		 it++)
 	{
-		if (listen((*it).first, MAX_LISTEN_REQUESTS) < 0)
+		if (listen((*it).first, 1000) < 0)
 		{
 			LOG_ERROR(std::string("listen() failed: ") + std::strerror(errno));
 			return (false);
@@ -210,33 +212,35 @@ bool Dispatcher::setListeners()
 */
 void Dispatcher::removeHandler(int &pollNum)
 {
-	int clientFd = mPollFds[pollNum].fd;
+	int handlerFd = mPollFds[pollNum].fd;
 
-	if (dynamic_cast<CgiHandler *>(mHandler[clientFd]))
+	if (dynamic_cast<CgiHandler *>(mHandler[handlerFd]))
 	{
-		LOG_INFO(std::string("closing CGI handler: ") + numToString(clientFd));
-		std::map<int, IHandler *>::iterator mit = mHandler.find(clientFd);
+		LOG_INFO(std::string("closing CGI handler: ") + numToString(handlerFd));
+		std::map<int, IHandler *>::iterator mit = mHandler.find(handlerFd);
 
-		for (int i = mPollFds.size(); i >= 0; i--)
+		int cgiIn = dynamic_cast<CgiHandler *>(mHandler[handlerFd])->getInFd();
+		int cgiOut = dynamic_cast<CgiHandler *>(mHandler[handlerFd])->getOutFd();
+		int pollSize = mPollFds.size();
+		for (int i = pollSize - 1; i >= 0; i--)
 		{
 			std::map<int, IHandler *>::iterator it = mHandler.find(mPollFds[i].fd);
-			std::vector<int>					fds;
 			if (it != mHandler.end() && it->second == mit->second)
 			{
-				LOG_INFO(std::string("closing CGI handler: ") + numToString(mPollFds[i].fd));
 				mPollFds.erase(mPollFds.begin() + i);
-				mHandler.erase(mPollFds[i].fd);
 			}
 		}
-		delete mHandler[clientFd];
+		delete mHandler[handlerFd];
+		mHandler.erase(cgiIn);
+		mHandler.erase(cgiOut);
 		pollNum = -1;
 		return;
 	}
-	LOG_NOTICE(std::string("closing connection ") + numToString(clientFd));
-	delete mHandler[clientFd];
-	mHandler.erase(clientFd);
+	LOG_NOTICE(std::string("closing connection ") + numToString(handlerFd));
+	delete mHandler[handlerFd];
+	mHandler.erase(handlerFd);
 	mPollFds.erase(mPollFds.begin() + pollNum);
-	close(clientFd);
+	close(handlerFd);
 }
 
 /**

@@ -53,8 +53,11 @@ public:
 	bool								parseBody(std::string &request);
 	std::string						   &getCookies();
 	void								reset();
-	ResponseBuilder					   *mResponse;
-	ClientHandler					   *mClient;
+
+	ResponseBuilder *mResponse;
+	size_t			 mBodySize;
+	ClientHandler	*mClient;
+	std::string		 mRequestUri;
 
 private:
 	bool parseHeader(const std::string &header);
@@ -66,7 +69,6 @@ private:
 	void handleError(int code, const std::string &errorMsg);
 
 	RequestMethod					   mMethod;
-	std::string						   mRequestUri;
 	std::string						   mHttpVersion;
 	std::string						   mRequestHeader;
 	std::string						   mTempPostFile;
@@ -81,8 +83,6 @@ private:
 	size_t							   mHeaderEnd;
 	size_t							   mParsePos;
 	size_t							   mChunkSize;
-	int								   mClientNum;
-	int								   mStatusCode;
 	int								   mRequestCount;
 	RequestState					   mState;
 };

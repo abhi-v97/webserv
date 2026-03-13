@@ -1,9 +1,12 @@
 #include <csignal>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <sstream>
 #include <stdlib.h>
+#include <sys/poll.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -16,14 +19,15 @@
 #include "Utils.hpp"
 #include "configParser.hpp"
 
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 16384
 
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
 CgiHandler::CgiHandler(ClientHandler *client)
-	: mPID(0), mOutFd(), mClient(client), mCgiBody(), mBodySize(0)
+	: mPID(0), mOutFd(), mClient(client), mCgiBody(), mBodySize(0), mInBytesWritten(0),
+	  mReqBodyFd(-1), mReqOffset(0)
 {
 }
 
@@ -81,6 +85,11 @@ CgiHandler::~CgiHandler()
 	{
 		close(mInFd[1]);
 		mInFd[1] = -1;
+	}
+	if (mReqBodyFd >= 0)
+	{
+		close(mReqBodyFd);
+		mReqBodyFd = -1;
 	}
 }
 
@@ -183,21 +192,36 @@ bool CgiHandler::execute(RouteResult &route)
 			setCgiEnv("SCRIPT_NAME", route.filePath);
 		}
 
+		std::map<std::string, std::string> headers = mClient->mParser.getHeaders();
+
+		for (std::map<std::string, std::string>::iterator it = headers.begin(); it != headers.end();
+			 it++)
+		{
+			std::string fieldName = "HTTP_" + it->first;
+			std::transform(fieldName.begin(), fieldName.end(), fieldName.begin(), ::toupper);
+			for (int i = 0; i < fieldName.size(); i++)
+			{
+				if (fieldName.at(i) == '-')
+					fieldName.at(i) = '_';
+			}
+			setCgiEnv(fieldName, it->second);
+		}
+
 		setCgiEnv("SERVER_PORT", numToString(mClient->mListener->getPort()));
 		setCgiEnv("GATEWAY_INTERFACE", "CGI/1.1");
 		setCgiEnv("SERVER_PROTOCOL", "HTTP/1.1");
-		setCgiEnv("PATH_INFO", "/directory/youpi.bla");
-		setCgiEnv("REQUEST_URI", "/directory/youpi.bla");
-		setCgiEnv("SCRIPT_NAME", "/directory/youpi.bla");
+		setCgiEnv("PATH_INFO", mClient->mParser.mRequestUri);
+		setCgiEnv("REQUEST_URI", mClient->mParser.mRequestUri);
+		setCgiEnv("SCRIPT_NAME", mClient->mParser.mRequestUri);
 
 		mEnvp.push_back(NULL);
 		char *const *envp = &mEnvp[0];
 
 		char *argv[3];
-		
+
 		LocationConfig &loc = mClient->mConfig->locations[route.locIndex];
-		size_t extStart = route.filePath.find_last_of('.');
-		std::string ext("");
+		size_t			extStart = route.filePath.find_last_of('.');
+		std::string		ext("");
 		if (extStart != std::string::npos)
 			ext = route.filePath.substr(extStart);
 		if (!loc.cgis.empty())
@@ -235,6 +259,14 @@ bool CgiHandler::execute(RouteResult &route)
 
 		close(this->mOutFd[1]);
 		close(this->mInFd[0]);
+
+		const std::string &reqFile = mClient->getRequestBodyFile();
+		if (!reqFile.empty())
+		{
+			mReqBodyFd = open(reqFile.c_str(), O_RDONLY | O_CLOEXEC);
+			if (mReqBodyFd < 0)
+				return (false);
+		}
 	}
 	return (true);
 }
@@ -272,30 +304,94 @@ void CgiHandler::handleEvents(struct pollfd &pollStruct)
 
 	if (pollStruct.fd == mInFd[1] && (pollStruct.revents & POLLOUT))
 	{
-		const std::string &reqBodyFile = mClient->getRequestBodyFile();
-		std::ifstream	   inf(reqBodyFile.c_str());
-		std::stringstream  buffer;
-		buffer << inf.rdbuf();
-
-		const std::string &reqBody = buffer.str();
-		while (!reqBody.empty())
-		{
-			if (waitpid(-1, NULL, WNOHANG) > 0)
-				break;
-			ssize_t written = write(mInFd[1], reqBody.data(), reqBody.size());
-			if (written > 0)
-				mInBytesWritten += written;
-			else
-			{
-				// fatal error
-				pollStruct.events &= ~POLLOUT;
-				break;
-			}
-		}
-		if (mInBytesWritten >= reqBody.size())
+		if (mReqBodyFd < 0)
 		{
 			pollStruct.events &= ~POLLOUT;
+			return;
 		}
+
+		struct stat st;
+
+		if (fstat(mReqBodyFd, &st))
+		{
+			std::cerr << "la ala  " << mReqBodyFd << ", " << std::strerror(errno) << std::endl;
+			close(mInFd[1]);
+			pollStruct.events &= ~POLLOUT;
+			return;
+		}
+
+		off_t remaining = st.st_size - static_cast<off_t>(mReqOffset);
+		if (remaining <= 0)
+		{
+			close(mInFd[1]);
+			pollStruct.events &= ~POLLOUT;
+			return;
+		}
+
+		const size_t toSplice =
+			std::min(static_cast<size_t>(BUFFER_SIZE), static_cast<size_t>(remaining));
+		ssize_t spliced = 0;
+
+		for (;;)
+		{
+			loff_t	off = mReqOffset;
+			ssize_t n = splice(
+				mReqBodyFd, &off, mInFd[1], NULL, toSplice, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
+			if (n > 0)
+			{
+				mReqOffset = off;
+				mInBytesWritten += static_cast<size_t>(n);
+				spliced += n;
+				break;
+			}
+			else if (n == 0)
+			{
+				pollStruct.events &= ~POLLOUT;
+				close(mReqBodyFd);
+				mReqBodyFd = -1;
+				return;
+			}
+			else
+			{
+				if (errno == EPIPE || errno == EBADF)
+				{
+					close(mInFd[1]);
+					if (mReqBodyFd >= 0)
+					{
+						close(mReqBodyFd);
+						mReqBodyFd = -1;
+					}
+					pollStruct.events &= ~POLLOUT;
+					waitpid(mPID, NULL, WNOHANG);
+					return;
+				}
+			}
+		}
+		// const std::string &reqBodyFile = mClient->getRequestBodyFile();
+		// std::ifstream	   inf(reqBodyFile.c_str());
+		// std::stringstream  buffer;
+		// buffer << inf.rdbuf();
+
+		// const std::string &reqBody = buffer.str();
+		// while (!reqBody.empty())
+		// {
+		// 	if (waitpid(-1, NULL, WNOHANG) > 0)
+		// 		break;
+		// 	ssize_t written = write(mInFd[1], reqBody.data(), reqBody.size());
+		// 	if (written > 0)
+		// 		mInBytesWritten += written;
+		// 	else
+		// 	{
+		// 		// fatal error
+		// 		// pollStruct.events &= ~POLLOUT;
+		// 		// std::cout << "cgi issue: " << std::strerror(errno) << std::endl;
+		// 		break;
+		// 	}
+		// }
+		// if (mInBytesWritten >= reqBody.size())
+		// {
+		// 	pollStruct.events &= ~POLLOUT;
+		// }
 		return;
 	}
 }
@@ -373,13 +469,11 @@ void CgiHandler::setCgiResponse()
 		{
 			outHeaders.push_back(name + ": " + value);
 		}
-
-		if (!hasContentType)
-			outHeaders.insert(outHeaders.begin(), "ContentType: text/html");
-		if (!hasContentLength)
-			outHeaders.push_back("Content-Length: " + numToString(body.size()));
 	}
-
+	if (!hasContentType)
+		outHeaders.insert(outHeaders.begin(), "ContentType: text/html");
+	if (!hasContentLength)
+		outHeaders.push_back("Content-Length: " + numToString(body.size()));
 	// map status to reason phrase (small set)
 	std::string reason;
 	switch (status)
@@ -408,9 +502,9 @@ void CgiHandler::setCgiResponse()
 	for (size_t i = 0; i < outHeaders.size(); i++)
 		finalResponse << outHeaders[i] << "\r\n";
 	finalResponse << "\r\n";
+	LOG_DEBUG(finalResponse.str());
 	finalResponse << body;
 	clientResponse = finalResponse.str();
-	LOG_DEBUG(finalResponse.str());
 	mKeepAlive = false;
 
 	// cleanup
