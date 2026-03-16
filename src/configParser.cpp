@@ -8,6 +8,9 @@
 #include <string>
 #include <set>
 
+size_t const configParser::DEFAULT_CLIENT_MAX_BODY_SIZE = 0;
+const char configParser::DEFAULT_IP_ADDRESS[] = "127.0.0.1";
+
 configParser::configParser(const std::string &filename) : input(readFile(filename)), lexer(input) {
 	advance();
 	parseConfig();
@@ -64,7 +67,7 @@ ServerConfig	configParser::parseServerBlock()
 	ServerConfig	cfg;
 	int				port;
 
-	cfg.clientMaxBodySize = 0;
+	cfg.clientMaxBodySize = DEFAULT_CLIENT_MAX_BODY_SIZE;
 	if (current.type != WORD || current.value != "server")
 		throw std::runtime_error("Expected 'server'");
 	advance();
@@ -99,8 +102,8 @@ void configParser::parseClientMaxBodySize(ServerConfig &cfg)
 	if (current.type != WORD)
 		throw std::runtime_error("Expected max body size value");
 	std::string val = current.value;
-    if (val.empty())
-        throw std::runtime_error("Empty value for client_max_body_size");
+	if (val.empty())
+		throw std::runtime_error("Empty value for client_max_body_size");
 	char unit = val[val.size() - 1];
 	long multiplier = 1;
 	if (unit == 'K' || unit == 'k')
@@ -126,7 +129,6 @@ void configParser::parseClientMaxBodySize(ServerConfig &cfg)
 	if (ss.fail() || number < 0)
 		throw std::runtime_error("Invalid number in client_max_body_size");
 	cfg.clientMaxBodySize = number * multiplier;
-	std::cout << cfg.clientMaxBodySize << std::endl; 
 	advance();
 	expect(SEMICOLON);
 }
@@ -153,7 +155,7 @@ std::pair<std::string,std::string> configParser::splitAddressPort(const std::str
 {
 	std::size_t colon = token.find(':');
 	if (colon == std::string::npos)
-		return std::make_pair(std::string("127.0.0.1"), token);
+		return std::make_pair(std::string(&DEFAULT_IP_ADDRESS[0]), token);
 	std::string addr = token.substr(0, colon);
 	std::string portStr = token.substr(colon + 1);
 	return std::make_pair(addr, portStr);
@@ -464,3 +466,32 @@ void configParser::parseCgiParam(CgiConfig &cfg)
 	advance();
 	expect(SEMICOLON);
 }
+
+	void		configParser::outputServerLogs(const ServerConfig &cfg) const
+	{
+		std::cout<< "  Server Name: " << cfg.serverName << std::endl;
+		std::cout<< "  Root: " << cfg.root << std::endl;
+
+		// clientMaxBodySize -> string
+		{
+			std::ostringstream ss;
+			ss << cfg.clientMaxBodySize;
+			std::cout<< "  Client Max Body Size: " << ss.str() << std::endl;
+		}
+
+		// listen configs
+		for (size_t i = 0; i < cfg.listenConfigs.size(); ++i)
+		{
+			const ListenConfig &listen = cfg.listenConfigs[i];
+			std::ostringstream ss;
+			ss << listen.IP << ":" << listen.port;
+			std::cout<< "  Listen: " << ss.str() << std::endl;
+		}
+
+		// locations
+		for (size_t j = 0; j < cfg.locations.size(); ++j)
+		{
+			const LocationConfig &loc = cfg.locations[j];
+			std::cout<< "  Location: " << loc.path << std::endl;
+		}
+	}
