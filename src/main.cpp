@@ -21,6 +21,13 @@ int main(int argc, char **argv)
 	{
 		configParser parser(configFile);
 		srv = parser.servers;
+		std::cout << "--Server Configuration--" << std::endl;
+		for (std::vector<ServerConfig>::iterator serverIter = srv.begin(); serverIter != srv.end();
+			 serverIter++)
+		{
+			std::cout << "Server " << (serverIter - srv.begin() + 1) << ":" << std::endl;
+			parser.outputServerLogs(*serverIter);
+		}
 		for (std::vector<ServerConfig>::iterator serverIter = srv.begin(); serverIter != srv.end();
 			 serverIter++)
 		{

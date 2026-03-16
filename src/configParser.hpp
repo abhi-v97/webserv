@@ -55,6 +55,8 @@ struct ServerConfig
 class configParser
 {
 private:
+	static size_t const					DEFAULT_CLIENT_MAX_BODY_SIZE;
+	static const char					DEFAULT_IP_ADDRESS[];
 	std::string							input;
 	configLexer							lexer;
 	configToken							current;
@@ -90,6 +92,7 @@ public:
 	~configParser();
 
 	std::vector<ServerConfig> servers;
+	void		outputServerLogs(const ServerConfig &cfg) const;
 };
 
 #endif
