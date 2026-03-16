@@ -311,7 +311,7 @@ void CgiHandler::handleEvents(struct pollfd &pollStruct)
 
 		struct stat st;
 
-		if (fstat(mReqBodyFd, &st))
+		if (stat(mClient->getRequestBodyFile().c_str(), &st))
 		{
 			std::cerr << "la ala  " << mReqBodyFd << ", " << std::strerror(errno) << std::endl;
 			close(mInFd[1]);

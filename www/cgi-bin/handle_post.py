@@ -8,8 +8,8 @@ print("Content-Type: text/html")
 print()  # Mandatory blank line after headers
 
 # 2. Read Environment Variables
-request_method = os.environ.get("HTTP_REQUEST_METHOD", "POST")
-content_length = os.environ.get("HTTP_CONTENT_LENGTH", "4")
+request_method = os.environ.get("REQUEST_METHOD", "POST")
+content_length = os.environ.get("CONTENT_LENGTH", "4")
 
 # 3. Read the POST body from stdin
 post_data = ""
